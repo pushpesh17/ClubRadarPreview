@@ -17,18 +17,23 @@ export function Footer() {
             </p>
             <div className="flex space-x-4">
               <Button variant="ghost" size="icon" asChild>
-                <a href="#" aria-label="Facebook">
-                  <Facebook className="h-5 w-5" />
+                <a href="https://x.com/Pushpes33640383" target="_blank" rel="noopener noreferrer" aria-label="Twitter">
+                  <Twitter className="h-5 w-5" />
                 </a>
               </Button>
               <Button variant="ghost" size="icon" asChild>
-                <a href="#" aria-label="Instagram">
+                <a href="https://x.com/Pushpes33640383" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
                   <Instagram className="h-5 w-5" />
                 </a>
               </Button>
               <Button variant="ghost" size="icon" asChild>
-                <a href="#" aria-label="Twitter">
-                  <Twitter className="h-5 w-5" />
+                <a href="https://x.com/Pushpes33640383" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+                  <Facebook className="h-5 w-5" />
+                </a>
+              </Button>
+              <Button variant="ghost" size="icon" asChild>
+                <a href="mailto:pushpeshlodiyaee@gmail.com" aria-label="Email">
+                  <Mail className="h-5 w-5" />
                 </a>
               </Button>
             </div>
@@ -44,12 +49,12 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/#features" className="text-muted-foreground hover:text-foreground">
+                <Link href="/how-it-works" className="text-muted-foreground hover:text-foreground">
                   How It Works
                 </Link>
               </li>
               <li>
-                <Link href="/#download" className="text-muted-foreground hover:text-foreground">
+                <Link href="/download-app" className="text-muted-foreground hover:text-foreground">
                   Download App
                 </Link>
               </li>
@@ -76,8 +81,13 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/venue/pricing" className="text-muted-foreground hover:text-foreground">
+                <Link href="/pricing" className="text-muted-foreground hover:text-foreground">
                   Pricing
+                </Link>
+              </li>
+              <li>
+                <Link href="/support" className="text-muted-foreground hover:text-foreground">
+                  Support
                 </Link>
               </li>
             </ul>
