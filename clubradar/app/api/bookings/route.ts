@@ -357,62 +357,102 @@ export async function POST(request: NextRequest) {
     }
 
     // Ensure user exists in Supabase users table (required for foreign key constraint)
-    // Check if user exists
-    const { data: existingUser, error: userCheckError } = await supabase
+    // Use UPSERT to handle race conditions (multiple requests trying to create the same user)
+    console.log("Ensuring user exists in database:", userId);
+    
+    const { data: userData, error: userUpsertError } = await (supabase as any)
       .from("users")
-      .select("id")
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (userCheckError && userCheckError.code !== "PGRST116") {
-      // PGRST116 is "not found" which is fine, but other errors are not
-      console.error("Error checking user existence:", userCheckError);
-      return NextResponse.json(
-        { 
-          error: "Failed to verify user account",
-          details: userCheckError.message 
-        },
-        { status: 500 }
-      );
-    }
-
-    // If user doesn't exist, create them
-    if (!existingUser) {
-      // Get user info from Clerk (if available)
-      // For now, create a minimal user record
-      const { data: newUser, error: createUserError } = await supabase
-        .from("users")
-        .insert({
+      .upsert(
+        {
           id: userId,
           name: null,
           email: null,
           phone: null,
           photo: null,
-        })
-        .select()
-        .single();
+        },
+        {
+          onConflict: "id", // Use id as the conflict column
+          ignoreDuplicates: false, // Update if exists, insert if not
+        }
+      )
+      .select()
+      .single();
 
-      if (createUserError) {
-        // If it's a duplicate key error, user might have been created by another request
-        if (createUserError.code === "23505") {
-          // Duplicate key - user was created by another request, continue
-          console.log("User was created by another request, continuing...");
+    if (userUpsertError) {
+      console.error("Error upserting user:", userUpsertError);
+      console.error("User ID:", userId);
+      console.error("Error code:", userUpsertError.code);
+      console.error("Error message:", userUpsertError.message);
+      
+      // If it's a duplicate key error, try to fetch the existing user
+      if (userUpsertError.code === "23505") {
+        console.log("Duplicate key error, fetching existing user...");
+        const { data: existingUser } = await supabase
+          .from("users")
+          .select("id")
+          .eq("id", userId)
+          .maybeSingle();
+        
+        if (existingUser) {
+          console.log("User exists, continuing with booking...");
         } else {
-          console.error("Error creating user:", createUserError);
           return NextResponse.json(
             { 
-              error: "Failed to create user account",
-              details: createUserError.message,
-              code: createUserError.code,
-              hint: "Please ensure your user account is properly synced. Try logging out and logging back in."
+              error: "Failed to sync user account",
+              details: "User account could not be created or found in the database",
+              code: userUpsertError.code,
+              hint: "Please try logging out and logging back in, then try booking again."
             },
             { status: 500 }
           );
         }
       } else {
-        console.log("User created successfully:", newUser?.id);
+        return NextResponse.json(
+          { 
+            error: "Failed to sync user account",
+            details: userUpsertError.message,
+            code: userUpsertError.code,
+            hint: "Please ensure your user account is properly synced. Try logging out and logging back in."
+          },
+          { status: 500 }
+        );
       }
+    } else {
+      console.log("User synced successfully:", userData?.id || userId);
     }
+
+    // Double-check user exists before creating booking (safety check)
+    const { data: verifyUser, error: verifyError } = await supabase
+      .from("users")
+      .select("id")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (verifyError && verifyError.code !== "PGRST116") {
+      console.error("Error verifying user after upsert:", verifyError);
+      return NextResponse.json(
+        { 
+          error: "Failed to verify user account",
+          details: "User account was not properly created. Please try again.",
+          hint: "Try logging out and logging back in, then attempt the booking again."
+        },
+        { status: 500 }
+      );
+    }
+
+    if (!verifyUser) {
+      console.error("User does not exist after upsert attempt. User ID:", userId);
+      return NextResponse.json(
+        { 
+          error: "User account not found",
+          details: "Your user account could not be found in the database. Please try logging out and logging back in.",
+          hint: "After logging back in, wait a moment and try booking again."
+        },
+        { status: 500 }
+      );
+    }
+
+    console.log("User verified, proceeding with booking creation...");
 
     // Generate booking ID
     const bookingId = `CR${Date.now()}${Math.floor(Math.random() * 10000)}`;
