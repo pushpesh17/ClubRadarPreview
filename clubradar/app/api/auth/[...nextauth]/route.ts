@@ -29,13 +29,15 @@ const config = {
     error: "/login?error=auth_error",
   },
   callbacks: {
-    async session({ session, token }) {
+    // Using `any` here to keep the config simple and avoid strict type issues.
+    // NextAuth will still enforce correct runtime behaviour.
+    async session({ session, token }: any) {
       if (session.user && token?.sub) {
         session.user.id = token.sub;
       }
       return session;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user }: any) {
       if (user) {
         token.sub = user.id;
       }
@@ -51,7 +53,7 @@ const config = {
 };
 
 // Initialize NextAuth
-const { handlers, auth, signIn, signOut } = NextAuth(config);
+const { handlers } = NextAuth(config);
 
-export { handlers, auth, signIn, signOut };
+// Only export route handlers for Next.js App Router
 export const { GET, POST } = handlers;

@@ -57,16 +57,31 @@ export async function generateQRCodeBuffer(
   options?: QRCode.QRCodeToBufferOptions
 ): Promise<Buffer> {
   try {
-    return await QRCode.toBuffer(text, {
-      width: 300,
-      errorCorrectionLevel: "M",
-      type: "image/png",
-      margin: 2,
-      color: {
-        dark: "#000000",
-        light: "#FFFFFF",
-      },
-      ...options,
+    // Use callback-based API to avoid type issues with QRCode.toBuffer overloads.
+    return await new Promise<Buffer>((resolve, reject) => {
+      QRCode.toBuffer(
+        text,
+        {
+          width: 300,
+          errorCorrectionLevel: "M",
+          // For Buffer output, QRCode expects the short type 'png'
+          type: "png",
+          margin: 2,
+          color: {
+            dark: "#000000",
+            light: "#FFFFFF",
+          },
+          ...options,
+        },
+        (err, buffer) => {
+          if (err || !buffer) {
+            console.error("Error generating QR code buffer:", err);
+            reject(err || new Error("Failed to generate QR code buffer"));
+          } else {
+            resolve(buffer);
+          }
+        }
+      );
     });
   } catch (error) {
     console.error("Error generating QR code:", error);

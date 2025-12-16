@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { useClerk, useUser } from "@clerk/nextjs";
 
 interface SidebarItem {
   title: string;
@@ -49,19 +50,21 @@ interface SidebarProps {
 
 export function Sidebar({ items, title, mobileTitle, onTabChange, activeTab }: SidebarProps) {
   const pathname = usePathname();
-  const [user, setUser] = useState<any>(null);
+  const { user, isSignedIn } = useUser();
+  const { signOut } = useClerk();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  useEffect(() => {
-    const userStr = localStorage.getItem("user");
-    if (userStr) {
-      setUser(JSON.parse(userStr));
-    }
-  }, []);
+  const displayName =
+    user?.fullName || user?.username || user?.firstName || "User";
+  const primaryEmail = user?.primaryEmailAddress?.emailAddress;
+  const primaryPhone = (user as any)?.primaryPhoneNumber?.phoneNumber;
 
-  const handleLogout = () => {
-    localStorage.removeItem("user");
-    window.location.href = "/";
+  const handleLogout = async () => {
+    try {
+      await signOut({ redirectUrl: "/" });
+    } catch {
+      window.location.href = "/";
+    }
   };
 
   return (
@@ -86,17 +89,19 @@ export function Sidebar({ items, title, mobileTitle, onTabChange, activeTab }: S
                 <SheetTitle>Menu</SheetTitle>
               </SheetHeader>
               <div className="flex flex-col space-y-2 mt-6">
-                {user && (
+                {isSignedIn && user && (
                   <div className="flex items-center gap-3 pb-4 border-b mb-2">
                     <Avatar className="h-10 w-10">
-                      <AvatarImage src={user.photo || undefined} />
+                      <AvatarImage src={user.imageUrl || undefined} />
                       <AvatarFallback>
-                        {user.name ? user.name.charAt(0).toUpperCase() : <User className="h-5 w-5" />}
+                        {displayName ? displayName.charAt(0).toUpperCase() : <User className="h-5 w-5" />}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{user.name || "User"}</p>
-                      <p className="text-xs text-muted-foreground truncate">{user.email || user.phone || ""}</p>
+                      <p className="text-sm font-medium truncate">{displayName}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {primaryEmail || primaryPhone || ""}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -136,7 +141,7 @@ export function Sidebar({ items, title, mobileTitle, onTabChange, activeTab }: S
                   Blog
                 </Link>
                 <div className="pt-4 border-t mt-4 space-y-2">
-                  {user ? (
+                  {isSignedIn && user ? (
                     <>
                       <Button variant="outline" asChild className="w-full" onClick={() => setIsMobileMenuOpen(false)}>
                         <Link href="/profile">Profile</Link>
@@ -221,29 +226,33 @@ export function Sidebar({ items, title, mobileTitle, onTabChange, activeTab }: S
         </div>
         
         {/* Profile Header */}
-        {user && (
+        {isSignedIn && user && (
           <div className="border-b px-4 py-3">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="w-full justify-start h-auto p-2 hover:bg-accent">
                   <div className="flex items-center gap-3 w-full">
                     <Avatar className="h-10 w-10">
-                      <AvatarImage src={user.photo || undefined} />
+                      <AvatarImage src={user.imageUrl || undefined} />
                       <AvatarFallback>
-                        {user.name ? user.name.charAt(0).toUpperCase() : <User className="h-5 w-5" />}
+                        {displayName ? displayName.charAt(0).toUpperCase() : <User className="h-5 w-5" />}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 text-left min-w-0">
-                      <p className="text-sm font-medium truncate">{user.name || "User"}</p>
-                      <p className="text-xs text-muted-foreground truncate">{user.email || user.phone || "Venue Account"}</p>
+                      <p className="text-sm font-medium truncate">{displayName}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {primaryEmail || primaryPhone || "Venue Account"}
+                      </p>
                     </div>
                   </div>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-56">
                 <div className="px-2 py-1.5">
-                  <p className="text-sm font-medium">{user.name || "User"}</p>
-                  <p className="text-xs text-muted-foreground">{user.email || user.phone || ""}</p>
+                  <p className="text-sm font-medium">{displayName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {primaryEmail || primaryPhone || ""}
+                  </p>
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>

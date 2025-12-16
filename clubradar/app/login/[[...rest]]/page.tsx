@@ -136,7 +136,6 @@ export default function LoginPage() {
                   colorWarning: "#ea580c",
                 },
               }}
-              onError={handleError}
             />
           </div>
 

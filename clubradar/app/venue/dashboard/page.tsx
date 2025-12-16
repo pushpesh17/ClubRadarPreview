@@ -100,6 +100,10 @@ export default function VenueDashboard() {
     payoutHistory: [] as Array<{ id: string; amount: number; date: string; status: string }>
   });
   const [earningsLoading, setEarningsLoading] = useState(false);
+  const [venueImages, setVenueImages] = useState<string[]>([]);
+  const [venueImageFiles, setVenueImageFiles] = useState<File[]>([]);
+  const [venueImagePreviews, setVenueImagePreviews] = useState<string[]>([]);
+  const [isUploadingVenueImages, setIsUploadingVenueImages] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -391,6 +395,11 @@ export default function VenueDashboard() {
 
           setIsApproved(statusData.isApproved);
           
+          // Load venue images if available
+          if (statusData.venue.images && Array.isArray(statusData.venue.images)) {
+            setVenueImages(statusData.venue.images);
+          }
+          
           // Load bookings if approved
           if (statusData.isApproved) {
             loadBookings(1, "", "all");
@@ -651,6 +660,112 @@ export default function VenueDashboard() {
     setImagePreviews(imagePreviews.filter((_, i) => i !== index));
   };
 
+  // Handle venue image selection
+  const handleVenueImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    
+    // Limit to 10 images
+    if (venueImages.length + venueImageFiles.length + files.length > 10) {
+      toast.error("Maximum 10 images allowed for venue");
+      return;
+    }
+
+    // Validate file types and sizes
+    const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    const maxSize = 5 * 1024 * 1024; // 5MB
+
+    const validFiles: File[] = [];
+    const previews: string[] = [];
+
+    files.forEach((file) => {
+      if (!validTypes.includes(file.type)) {
+        toast.error(`${file.name} is not a valid image file`);
+        return;
+      }
+      if (file.size > maxSize) {
+        toast.error(`${file.name} is too large (max 5MB)`);
+        return;
+      }
+      validFiles.push(file);
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (e.target?.result) {
+          previews.push(e.target.result as string);
+          if (previews.length === validFiles.length) {
+            setVenueImagePreviews([...venueImagePreviews, ...previews]);
+          }
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    setVenueImageFiles([...venueImageFiles, ...validFiles]);
+  };
+
+  // Remove venue image
+  const handleRemoveVenueImage = (index: number, isPreview: boolean) => {
+    if (isPreview) {
+      setVenueImageFiles(venueImageFiles.filter((_, i) => i !== index));
+      setVenueImagePreviews(venueImagePreviews.filter((_, i) => i !== index));
+    } else {
+      // Remove uploaded image
+      const newImages = venueImages.filter((_, i) => i !== index);
+      setVenueImages(newImages);
+      // TODO: Also delete from server/storage
+    }
+  };
+
+  // Upload venue images
+  const handleUploadVenueImages = async () => {
+    if (venueImageFiles.length === 0) {
+      toast.error("Please select images to upload");
+      return;
+    }
+
+    if (!venue) {
+      toast.error("Venue information not available");
+      return;
+    }
+
+    setIsUploadingVenueImages(true);
+    try {
+      const formData = new FormData();
+      venueImageFiles.forEach((file) => {
+        formData.append("images", file);
+      });
+      formData.append("venue_id", venue.id);
+
+      const response = await fetch("/api/venues/upload-images", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to upload images");
+      }
+
+      toast.success(`Successfully uploaded ${data.images?.length || 0} image(s)`);
+      
+      // Update venue images
+      if (data.images) {
+        const newImageUrls = data.images.map((img: any) => img.url);
+        setVenueImages([...venueImages, ...newImageUrls]);
+      }
+      
+      // Clear file selections
+      setVenueImageFiles([]);
+      setVenueImagePreviews([]);
+    } catch (error: any) {
+      console.error("Venue image upload error:", error);
+      toast.error(error.message || "Failed to upload images");
+    } finally {
+      setIsUploadingVenueImages(false);
+    }
+  };
+
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
@@ -851,7 +966,13 @@ export default function VenueDashboard() {
   if (showPendingMessage) {
     return (
       <div className="min-h-screen bg-muted/30">
-        <Sidebar items={sidebarItems} activeTab={activeTab} setActiveTab={setActiveTab} />
+        <Sidebar
+          items={sidebarItems}
+          title="Venue Dashboard"
+          mobileTitle="Dashboard"
+          onTabChange={setActiveTab}
+          activeTab={activeTab}
+        />
         <div className="lg:pl-64 p-4 sm:p-6 lg:p-8">
           <div className="max-w-2xl mx-auto">
             <Card className={`border-2 ${
@@ -880,11 +1001,11 @@ export default function VenueDashboard() {
                     ? "Registration Under Review" 
                     : "Registration Rejected"}
                 </CardTitle>
-                <CardDescription className="text-base sm:text-lg">
-                  {venue.status === "pending"
-                    ? "Your venue registration is currently being reviewed by our team."
-                    : "Your venue registration was not approved."}
-                </CardDescription>
+              <CardDescription className="text-base sm:text-lg">
+                {venue.status === "pending"
+                  ? "Your venue registration is pending approval. You can explore your dashboard, and you'll be able to create and publish events once our team approves your venue."
+                  : "Your venue registration was not approved."}
+              </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 {venue.status === "pending" && (
@@ -897,15 +1018,14 @@ export default function VenueDashboard() {
                     </div>
                     <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 p-4 border border-blue-200 dark:border-blue-800">
                       <p className="text-sm text-blue-900 dark:text-blue-200 leading-relaxed">
-                        <strong>What&apos;s happening?</strong> Our team is reviewing your venue registration. 
-                        This process usually takes 24-48 hours. Once approved, you&apos;ll be able to create events, 
-                        manage bookings, and track your earnings from your dashboard.
+                        <strong>What&apos;s happening?</strong> Our team is reviewing your venue details to make sure everything looks good. 
+                        This usually takes <strong>24–48 hours</strong>. Once approved, you&apos;ll be able to create events, accept bookings, and see your earnings here.
                       </p>
                     </div>
                     <div className="rounded-lg bg-yellow-50 dark:bg-yellow-950/20 p-4 border border-yellow-200 dark:border-yellow-800">
                       <p className="text-sm text-yellow-900 dark:text-yellow-200">
-                        <strong>Note:</strong> You can view your dashboard, but you won&apos;t be able to create events 
-                        until your registration is approved.
+                        <strong>Note:</strong> You can already explore your dashboard and get familiar with the tools, but 
+                        <span className="font-semibold"> creating or publishing events is locked until your registration is approved.</span>
                       </p>
                     </div>
                   </>
@@ -1171,6 +1291,119 @@ export default function VenueDashboard() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Venue Images Section */}
+          {isApproved && (
+            <Card className="border-2">
+              <CardHeader>
+                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                  <ImageIcon className="h-5 w-5" />
+                  Venue Photos
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  Upload photos of your venue to attract more customers (Max 10 images)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Existing Images */}
+                {venueImages.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-3">Current Photos</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                      {venueImages.map((img, idx) => (
+                        <div key={idx} className="relative group aspect-video rounded-lg overflow-hidden bg-muted">
+                          <img
+                            src={img}
+                            alt={`Venue photo ${idx + 1}`}
+                            className="h-full w-full object-cover"
+                          />
+                          <button
+                            onClick={() => handleRemoveVenueImage(idx, false)}
+                            className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Preview New Images */}
+                {venueImagePreviews.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-3">New Images to Upload</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                      {venueImagePreviews.map((preview, idx) => (
+                        <div key={idx} className="relative group aspect-video rounded-lg overflow-hidden bg-muted">
+                          <img
+                            src={preview}
+                            alt={`Preview ${idx + 1}`}
+                            className="h-full w-full object-cover"
+                          />
+                          <button
+                            onClick={() => handleRemoveVenueImage(idx, true)}
+                            className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Upload Section */}
+                <div className="space-y-3">
+                  <label className="block">
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/webp"
+                      multiple
+                      onChange={handleVenueImageSelect}
+                      className="hidden"
+                      disabled={isUploadingVenueImages || venueImages.length + venueImageFiles.length >= 10}
+                    />
+                    <div className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
+                      venueImages.length + venueImageFiles.length >= 10
+                        ? "border-muted-foreground/25 cursor-not-allowed opacity-50"
+                        : "border-muted-foreground/25 hover:border-primary"
+                    }`}>
+                      <ImageIcon className="h-8 w-8 text-muted-foreground mb-2" />
+                      <p className="text-sm text-muted-foreground text-center px-4">
+                        {venueImages.length + venueImageFiles.length >= 10
+                          ? "Maximum 10 images reached"
+                          : "Click to upload venue photos"}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        JPEG, PNG, WebP (Max 5MB each)
+                      </p>
+                    </div>
+                  </label>
+                  
+                  {venueImageFiles.length > 0 && (
+                    <Button
+                      onClick={handleUploadVenueImages}
+                      disabled={isUploadingVenueImages}
+                      className="w-full sm:w-auto"
+                    >
+                      {isUploadingVenueImages ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <ImageIcon className="mr-2 h-4 w-4" />
+                          Upload {venueImageFiles.length} Image{venueImageFiles.length !== 1 ? "s" : ""}
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Events Tab */}

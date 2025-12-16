@@ -1,22 +1,21 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 
+// Server-side auth callback handler for Supabase email links.
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
-  
-  // If this is a browser request, redirect to client-side callback page
-  // This handles Gmail-wrapped URLs better
+
+  // If this is a browser request, redirect to client-side callback page with all query params
   const userAgent = request.headers.get("user-agent") || "";
   if (userAgent.includes("Mozilla") || userAgent.includes("Chrome") || userAgent.includes("Safari")) {
-    // Redirect to client-side callback page with all query params
     const params = new URLSearchParams();
     requestUrl.searchParams.forEach((value, key) => {
       params.append(key, value);
     });
     return NextResponse.redirect(new URL(`/auth/callback?${params.toString()}`, requestUrl.origin));
   }
-  
+
   const supabase = await createClient();
 
   // Get all query parameters
@@ -29,20 +28,19 @@ export async function GET(request: NextRequest) {
   console.log("Full URL:", requestUrl.toString());
   console.log("Params:", { token_hash, token, type, code });
 
-  // Try different verification methods
   let verificationSuccess = false;
-  let verificationError = null;
-  let verificationData = null;
+  let verificationError: any = null;
+  let verificationData: any = null;
 
-  // Method 1: token + type=magiclink (most common for Supabase magic links)
+  // Method 1: token + type (magic link / OTP)
   if (token && type) {
     console.log(`Trying token verification with type: ${type}...`);
     try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        type: type as any,
-        token: token,
-      });
-      
+      const { data, error } = await (supabase as any).auth.verifyOtp({
+        type,
+        token,
+      } as any);
+
       if (!error && data) {
         verificationSuccess = true;
         verificationData = data;
@@ -64,7 +62,7 @@ export async function GET(request: NextRequest) {
     console.log("Trying code exchange (PKCE)...");
     try {
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-      
+
       if (!error && data.session) {
         verificationSuccess = true;
         verificationData = data;
@@ -85,11 +83,11 @@ export async function GET(request: NextRequest) {
   else if (token_hash && type) {
     console.log("Trying token_hash verification...");
     try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        type: type as any,
+      const { data, error } = await (supabase as any).auth.verifyOtp({
+        type,
         token_hash,
-      });
-      
+      } as any);
+
       if (!error && data) {
         verificationSuccess = true;
         verificationData = data;
@@ -102,9 +100,8 @@ export async function GET(request: NextRequest) {
       verificationError = err;
       console.error("Token_hash verification exception:", err);
     }
-  }
-  // Method 4: Check if session already exists
-  else {
+  } else {
+    // Method 4: Check if session already exists
     console.log("No verification params, checking existing session...");
     try {
       const {
@@ -131,15 +128,14 @@ export async function GET(request: NextRequest) {
 
   // If verification was successful
   if (verificationSuccess) {
-    // Get the user (either from verification data or current session)
     let user = verificationData?.user;
-    
+
     if (!user) {
       const {
         data: { user: currentUser },
         error: userError,
       } = await supabase.auth.getUser();
-      
+
       if (currentUser && !userError) {
         user = currentUser;
       }
@@ -148,27 +144,25 @@ export async function GET(request: NextRequest) {
     if (user) {
       console.log("User authenticated:", user.email);
 
-      // Create or update user profile
       try {
-        const { error: profileError } = await supabase.from("users").upsert({
-          id: user.id,
-          email: user.email,
-          phone: user.phone,
-          updated_at: new Date().toISOString(),
-        });
+        const { error: profileError } = await (supabase as any).from("users").upsert(
+          {
+            id: user.id,
+            email: user.email,
+            phone: user.phone,
+            updated_at: new Date().toISOString(),
+          } as any
+        );
 
         if (profileError) {
           console.error("Profile creation error:", profileError);
-          // Continue anyway - profile can be created later
         } else {
           console.log("User profile created/updated");
         }
       } catch (profileErr) {
         console.error("Profile upsert exception:", profileErr);
-        // Continue anyway
       }
 
-      // Redirect to discover page
       console.log("Redirecting to /discover");
       return NextResponse.redirect(new URL("/discover", requestUrl.origin));
     } else {
@@ -177,14 +171,15 @@ export async function GET(request: NextRequest) {
         new URL("/login?error=user_not_found", requestUrl.origin)
       );
     }
-  } else {
-    // Verification failed
-    console.error("Verification failed:", verificationError);
-    const errorMessage = verificationError?.message || "authentication_failed";
-    console.log("Redirecting to login with error:", errorMessage);
-    return NextResponse.redirect(
-      new URL(`/login?error=${encodeURIComponent(errorMessage)}`, requestUrl.origin)
-    );
   }
+
+  // Verification failed
+  console.error("Verification failed:", verificationError);
+  const errorMessage = verificationError?.message || "authentication_failed";
+  console.log("Redirecting to login with error:", errorMessage);
+  return NextResponse.redirect(
+    new URL(`/login?error=${encodeURIComponent(errorMessage)}`, requestUrl.origin)
+  );
 }
+
 

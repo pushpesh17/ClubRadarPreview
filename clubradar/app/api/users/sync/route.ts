@@ -44,9 +44,9 @@ export async function POST(request: NextRequest) {
     });
 
     // Check if user already exists (use maybeSingle to avoid errors when not found)
-    const { data: existingUser, error: checkError } = await supabase
+    const { data: existingUser, error: checkError } = await (supabase as any)
       .from("users")
-      .select("id")
+      .select("id, name, email, phone, photo")
       .eq("id", userId)
       .maybeSingle();
 

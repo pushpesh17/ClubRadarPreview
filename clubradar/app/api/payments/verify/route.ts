@@ -46,13 +46,13 @@ export async function POST(request: Request) {
 
     // Update booking with payment details
     if (booking_id) {
-      const { error: updateError } = await supabase
+      const { error: updateError } = await (supabase as any)
         .from("bookings")
         .update({
           payment_id: razorpay_payment_id,
           payment_status: "completed",
           updated_at: new Date().toISOString(),
-        })
+        } as any)
         .eq("id", booking_id)
         .eq("user_id", user.id);
 

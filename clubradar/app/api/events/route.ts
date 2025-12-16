@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/server";
 
 // GET /api/events - Get all events
 export async function GET(request: NextRequest) {
@@ -229,7 +230,7 @@ export async function POST(request: Request) {
     const eventData = await request.json();
 
     // Get user's venue
-    const { data: venue, error: venueError } = await supabase
+    const { data: venue, error: venueError } = await (supabase as any)
       .from("venues")
       .select("id")
       .eq("user_id", user.id)

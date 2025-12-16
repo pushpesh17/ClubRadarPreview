@@ -89,6 +89,10 @@ export async function GET(request: NextRequest) {
           city: venue.city,
           address: venue.address,
           createdAt: venue.created_at,
+          images: venue.images || [],
+          amenities: venue.amenities || [],
+          rating: venue.rating || 0,
+          description: venue.description || null,
         },
         isApproved: venue.status === "approved",
         message: venue.status === "pending" 

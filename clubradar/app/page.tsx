@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
@@ -27,23 +25,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 export default function Home() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
-  // Handle Supabase auth callback (code parameter from magic link)
-  useEffect(() => {
-    const handleAuthCallback = async () => {
-      const code = searchParams.get("code");
-
-      if (code) {
-        // User clicked magic link, redirect to callback route
-        router.replace(`/auth/callback?code=${code}`);
-      }
-    };
-
-    handleAuthCallback();
-  }, [searchParams, router]);
-
   return (
     <div className="flex min-h-screen flex-col">
       <Navbar />

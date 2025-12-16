@@ -140,7 +140,6 @@ export default function SignUpPage() {
                   colorWarning: "#ea580c",
                 },
               }}
-              onError={handleError}
             />
           </div>
 

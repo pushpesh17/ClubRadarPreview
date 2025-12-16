@@ -50,14 +50,15 @@ export async function POST(request: Request) {
 
     // Create or update user profile
     if (data.user) {
-      const { error: profileError } = await supabase
+      // Cast to any to avoid strict typing issues with generic Supabase types.
+      const { error: profileError } = await (supabase as any)
         .from("users")
         .upsert({
           id: data.user.id,
           email: data.user.email,
           phone: data.user.phone,
           updated_at: new Date().toISOString(),
-        });
+        } as any);
 
       if (profileError) {
         console.error("Error creating user profile:", profileError);
