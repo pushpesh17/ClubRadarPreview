@@ -50,7 +50,7 @@ export default function Home() {
                 <span className="block bg-gradient-to-r from-pink-200 via-purple-200 to-pink-200 bg-clip-text text-transparent mt-2">
                   Nightlife in India
                 </span>
-              </h1>
+          </h1>
 
               <p className="mt-6 text-lg leading-8 text-purple-100 sm:text-xl lg:text-2xl max-w-2xl mx-auto">
                 Find the hottest clubs, book instant entry passes, and skip the
@@ -521,8 +521,8 @@ export default function Home() {
               </h2>
               <p className="mt-4 text-lg text-muted-foreground">
                 Secure, fast, and reliable infrastructure
-              </p>
-            </div>
+          </p>
+        </div>
             <div className="mx-auto max-w-4xl">
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
                 {[
@@ -627,7 +627,7 @@ export default function Home() {
                 </CardContent>
               </Card>
             </div>
-          </div>
+        </div>
         </section>
       </main>
       <Footer />

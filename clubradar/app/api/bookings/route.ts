@@ -356,6 +356,64 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Ensure user exists in Supabase users table (required for foreign key constraint)
+    // Check if user exists
+    const { data: existingUser, error: userCheckError } = await supabase
+      .from("users")
+      .select("id")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (userCheckError && userCheckError.code !== "PGRST116") {
+      // PGRST116 is "not found" which is fine, but other errors are not
+      console.error("Error checking user existence:", userCheckError);
+      return NextResponse.json(
+        { 
+          error: "Failed to verify user account",
+          details: userCheckError.message 
+        },
+        { status: 500 }
+      );
+    }
+
+    // If user doesn't exist, create them
+    if (!existingUser) {
+      // Get user info from Clerk (if available)
+      // For now, create a minimal user record
+      const { data: newUser, error: createUserError } = await supabase
+        .from("users")
+        .insert({
+          id: userId,
+          name: null,
+          email: null,
+          phone: null,
+          photo: null,
+        })
+        .select()
+        .single();
+
+      if (createUserError) {
+        // If it's a duplicate key error, user might have been created by another request
+        if (createUserError.code === "23505") {
+          // Duplicate key - user was created by another request, continue
+          console.log("User was created by another request, continuing...");
+        } else {
+          console.error("Error creating user:", createUserError);
+          return NextResponse.json(
+            { 
+              error: "Failed to create user account",
+              details: createUserError.message,
+              code: createUserError.code,
+              hint: "Please ensure your user account is properly synced. Try logging out and logging back in."
+            },
+            { status: 500 }
+          );
+        }
+      } else {
+        console.log("User created successfully:", newUser?.id);
+      }
+    }
+
     // Generate booking ID
     const bookingId = `CR${Date.now()}${Math.floor(Math.random() * 10000)}`;
 
@@ -383,6 +441,24 @@ export async function POST(request: NextRequest) {
 
     if (bookingError) {
       console.error("Error creating booking:", bookingError);
+      
+      // Check if it's a foreign key constraint error
+      if (
+        bookingError.code === "23503" || 
+        bookingError.message?.includes("foreign key constraint") ||
+        bookingError.message?.includes("bookings_user_id_fkey")
+      ) {
+        return NextResponse.json(
+          { 
+            error: "User account not found",
+            details: "Your user account needs to be synced to the database. Please try logging out and logging back in, then try booking again.",
+            hint: "The user account must exist in the users table before creating a booking. This should happen automatically when you log in.",
+            code: bookingError.code,
+            fix: "Try logging out and logging back in, or contact support if the issue persists."
+          },
+          { status: 400 }
+        );
+      }
       
       // Check if it's a network/connection error
       if (bookingError.message?.includes("fetch failed") || bookingError.message?.includes("TypeError")) {
