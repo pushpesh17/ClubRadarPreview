@@ -40,6 +40,13 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import toast from "react-hot-toast";
 import Link from "next/link";
 
@@ -74,11 +81,12 @@ interface Event {
 
 interface Review {
   id: string;
-  user_name: string;
+  userName: string;
+  userPhoto?: string | null;
   rating: number;
   comment: string;
-  created_at: string;
-  helpful_count?: number;
+  createdAt: string;
+  helpfulCount?: number;
 }
 
 export default function VenueDetailPage() {
@@ -90,6 +98,14 @@ export default function VenueDetailPage() {
   const [venue, setVenue] = useState<Venue | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewsPage, setReviewsPage] = useState(1);
+  const [reviewsTotalPages, setReviewsTotalPages] = useState(1);
+  const [reviewsSort, setReviewsSort] = useState<
+    "recent" | "helpful" | "rating"
+  >("recent");
+  const [viewerCanReview, setViewerCanReview] = useState(false);
+  const [viewerHasReviewed, setViewerHasReviewed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [isBookingDialogOpen, setIsBookingDialogOpen] = useState(false);
@@ -108,7 +124,7 @@ export default function VenueDetailPage() {
   useEffect(() => {
     if (venueId) {
       loadVenueData();
-      loadReviews();
+      loadReviews(1, "recent", true);
     }
   }, [venueId]);
 
@@ -147,47 +163,47 @@ export default function VenueDetailPage() {
     }
   };
 
-  const loadReviews = async () => {
+  const loadReviews = async (
+    page: number = 1,
+    sort: "recent" | "helpful" | "rating" = reviewsSort,
+    replace: boolean = page === 1
+  ) => {
     try {
-      // For now, we'll use mock reviews. Later, integrate with reviews API
-      const mockReviews: Review[] = [
+      setReviewsLoading(true);
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: "10",
+        sort,
+      });
+      const res = await fetch(
+        `/api/venues/${venueId}/reviews?${params.toString()}`,
         {
-          id: "1",
-          user_name: "Rahul S.",
-          rating: 5,
-          comment:
-            "Amazing venue! Great music and atmosphere. Will definitely come back!",
-          created_at: new Date(
-            Date.now() - 2 * 24 * 60 * 60 * 1000
-          ).toISOString(),
-          helpful_count: 12,
-        },
-        {
-          id: "2",
-          user_name: "Priya M.",
-          rating: 4,
-          comment:
-            "Good place with nice vibes. The DJ was great and the crowd was fun.",
-          created_at: new Date(
-            Date.now() - 5 * 24 * 60 * 60 * 1000
-          ).toISOString(),
-          helpful_count: 8,
-        },
-        {
-          id: "3",
-          user_name: "Amit K.",
-          rating: 5,
-          comment:
-            "Best nightclub in the city! Excellent service and great music selection.",
-          created_at: new Date(
-            Date.now() - 7 * 24 * 60 * 60 * 1000
-          ).toISOString(),
-          helpful_count: 15,
-        },
-      ];
-      setReviews(mockReviews);
+          credentials: "include",
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load reviews");
+
+      const incoming: Review[] = (data.reviews || []).map((r: any) => ({
+        id: r.id,
+        userName: r.userName || "Guest",
+        userPhoto: r.userPhoto ?? null,
+        rating: r.rating,
+        comment: r.comment,
+        helpfulCount: r.helpfulCount || 0,
+        createdAt: r.createdAt,
+      }));
+
+      setReviewsTotalPages(data.pagination?.totalPages || 1);
+      setViewerCanReview(!!data.viewer?.canReview);
+      setViewerHasReviewed(!!data.viewer?.hasReviewed);
+
+      if (replace) setReviews(incoming);
+      else setReviews((prev) => [...prev, ...incoming]);
     } catch (error) {
       console.error("Error loading reviews:", error);
+    } finally {
+      setReviewsLoading(false);
     }
   };
 
@@ -246,6 +262,18 @@ export default function VenueDetailPage() {
       return;
     }
 
+    if (viewerHasReviewed) {
+      toast.error("You already reviewed this venue.");
+      return;
+    }
+
+    if (!viewerCanReview) {
+      toast.error(
+        "Only users with a completed booking can write a review for this venue."
+      );
+      return;
+    }
+
     if (!reviewComment.trim()) {
       toast.error("Please write a review comment");
       return;
@@ -253,13 +281,22 @@ export default function VenueDetailPage() {
 
     setIsSubmittingReview(true);
     try {
-      // TODO: Integrate with reviews API when available
+      const res = await fetch(`/api/venues/${venueId}/reviews`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ rating: reviewRating, comment: reviewComment }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to submit review");
+
       toast.success("Review submitted successfully!");
       setIsReviewDialogOpen(false);
       setReviewComment("");
       setReviewRating(5);
       // Reload reviews
-      loadReviews();
+      setReviewsPage(1);
+      loadReviews(1, reviewsSort, true);
     } catch (error: any) {
       toast.error(error.message || "Failed to submit review");
     } finally {
@@ -346,7 +383,7 @@ export default function VenueDetailPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Navbar />
-      <div className="flex-1 bg-gradient-to-br from-purple-50 via-pink-50 to-white dark:from-purple-950 dark:via-pink-950 dark:to-black">
+      <div className="flex-1 bg-linear-to-br from-purple-50 via-pink-50 to-white dark:from-purple-950 dark:via-pink-950 dark:to-black">
         <div className="container px-4 py-8">
           {/* Back Button */}
           <Link
@@ -360,7 +397,7 @@ export default function VenueDetailPage() {
           {/* Image Gallery */}
           {hasImages ? (
             <div className="mb-8">
-              <div className="relative h-64 md:h-96 lg:h-[500px] w-full rounded-2xl overflow-hidden bg-gradient-to-br from-purple-500 to-pink-500">
+              <div className="relative h-64 md:h-96 lg:h-[500px] w-full rounded-2xl overflow-hidden bg-linear-to-br from-purple-500 to-pink-500">
                 <img
                   src={venueImages[0]}
                   alt={venue.name}
@@ -401,7 +438,7 @@ export default function VenueDetailPage() {
               )}
             </div>
           ) : (
-            <div className="mb-8 h-64 md:h-96 lg:h-[500px] w-full rounded-2xl overflow-hidden bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+            <div className="mb-8 h-64 md:h-96 lg:h-[500px] w-full rounded-2xl overflow-hidden bg-linear-to-br from-purple-500 to-pink-500 flex items-center justify-center">
               <div className="text-center text-white/80">
                 <ImageIcon className="h-16 w-16 mx-auto mb-4 opacity-50" />
                 <p className="text-lg">No photos available</p>
@@ -523,7 +560,7 @@ export default function VenueDetailPage() {
 
           {/* Reviews Section */}
           <Card className="mb-8">
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="flex items-center gap-2">
                 <Star className="h-5 w-5 text-yellow-500" />
                 Reviews
@@ -533,32 +570,82 @@ export default function VenueDetailPage() {
                   </span>
                 )}
               </CardTitle>
-              {user && (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                <Select
+                  value={reviewsSort}
+                  onValueChange={(v) => {
+                    const next = v as any as "recent" | "helpful" | "rating";
+                    setReviewsSort(next);
+                    setReviewsPage(1);
+                    loadReviews(1, next, true);
+                  }}
+                >
+                  <SelectTrigger className="h-10 w-full sm:h-9 sm:w-[160px]">
+                    <SelectValue placeholder="Sort" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="recent">Most recent</SelectItem>
+                    <SelectItem value="helpful">Most helpful</SelectItem>
+                    <SelectItem value="rating">Highest rated</SelectItem>
+                  </SelectContent>
+                </Select>
+
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setIsReviewDialogOpen(true)}
+                  onClick={() => {
+                    if (!user) {
+                      toast.error("Please login to write a review");
+                      router.push(`/login?redirect=/venue/${venueId}`);
+                      return;
+                    }
+                    if (!viewerCanReview) {
+                      toast.error(
+                        "Only users with a completed booking can write a review for this venue."
+                      );
+                      return;
+                    }
+                    if (viewerHasReviewed) {
+                      toast.error("You already reviewed this venue.");
+                      return;
+                    }
+                    setIsReviewDialogOpen(true);
+                  }}
+                  disabled={!user || !viewerCanReview || viewerHasReviewed}
+                  className="w-full sm:w-auto"
                 >
-                  Write Review
+                  {viewerHasReviewed ? "Reviewed" : "Write Review"}
                 </Button>
-              )}
+              </div>
             </CardHeader>
             <CardContent>
-              {reviews.length === 0 ? (
+              {!user ? (
+                <div className="mb-4 rounded-lg border bg-background/60 p-3 text-sm text-muted-foreground">
+                  Login to write a review. Only users with a completed booking
+                  can review.
+                </div>
+              ) : !viewerCanReview ? (
+                <div className="mb-4 rounded-lg border bg-background/60 p-3 text-sm text-muted-foreground">
+                  Only users with a completed booking can write a review for
+                  this venue.
+                </div>
+              ) : viewerHasReviewed ? (
+                <div className="mb-4 rounded-lg border bg-background/60 p-3 text-sm text-muted-foreground">
+                  You already reviewed this venue. Thanks!
+                </div>
+              ) : null}
+
+              {reviewsLoading && reviews.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground">
+                  <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin" />
+                  Loading reviews...
+                </div>
+              ) : reviews.length === 0 ? (
                 <div className="text-center py-8">
                   <Star className="h-12 w-12 mx-auto text-muted-foreground opacity-50 mb-4" />
                   <p className="text-muted-foreground">
                     No reviews yet. Be the first to review!
                   </p>
-                  {user && (
-                    <Button
-                      variant="outline"
-                      className="mt-4"
-                      onClick={() => setIsReviewDialogOpen(true)}
-                    >
-                      Write First Review
-                    </Button>
-                  )}
                 </div>
               ) : (
                 <div className="space-y-6">
@@ -567,16 +654,32 @@ export default function VenueDetailPage() {
                       key={review.id}
                       className="border-b pb-6 last:border-0 last:pb-0"
                     >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-semibold">
-                            {review.user_name.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <div className="font-semibold">
-                              {review.user_name}
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="flex items-start gap-3 min-w-0">
+                          {review.userPhoto ? (
+                            <img
+                              src={review.userPhoto}
+                              alt={review.userName}
+                              className="h-10 w-10 rounded-full object-cover"
+                              loading="lazy"
+                              decoding="async"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                (
+                                  e.currentTarget as HTMLImageElement
+                                ).style.display = "none";
+                              }}
+                            />
+                          ) : (
+                            <div className="h-10 w-10 rounded-full bg-linear-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-semibold">
+                              {review.userName.charAt(0).toUpperCase()}
                             </div>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          )}
+                          <div className="min-w-0">
+                            <div className="font-semibold truncate">
+                              {review.userName}
+                            </div>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
                               <div className="flex items-center">
                                 {[...Array(5)].map((_, i) => (
                                   <Star
@@ -590,7 +693,7 @@ export default function VenueDetailPage() {
                                 ))}
                               </div>
                               <span>•</span>
-                              <span>{formatReviewDate(review.created_at)}</span>
+                              <span>{formatReviewDate(review.createdAt)}</span>
                             </div>
                           </div>
                         </div>
@@ -598,15 +701,39 @@ export default function VenueDetailPage() {
                       <p className="text-sm text-muted-foreground leading-relaxed mt-2">
                         {review.comment}
                       </p>
-                      {review.helpful_count !== undefined &&
-                        review.helpful_count > 0 && (
+                      {review.helpfulCount !== undefined &&
+                        review.helpfulCount > 0 && (
                           <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                             <ThumbsUp className="h-3 w-3" />
-                            <span>{review.helpful_count} helpful</span>
+                            <span>{review.helpfulCount} helpful</span>
                           </div>
                         )}
                     </div>
                   ))}
+
+                  {reviewsPage < reviewsTotalPages && (
+                    <div className="pt-2 flex justify-center">
+                      <Button
+                        variant="outline"
+                        disabled={reviewsLoading}
+                        onClick={() => {
+                          const next = reviewsPage + 1;
+                          setReviewsPage(next);
+                          loadReviews(next, reviewsSort, false);
+                        }}
+                        className="w-full sm:w-auto"
+                      >
+                        {reviewsLoading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Loading...
+                          </>
+                        ) : (
+                          "Load more reviews"
+                        )}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -642,7 +769,7 @@ export default function VenueDetailPage() {
                       }`}
                     >
                       {event.images && event.images.length > 0 ? (
-                        <div className="aspect-video w-full overflow-hidden bg-gradient-to-br from-purple-500 to-pink-500">
+                        <div className="aspect-video w-full overflow-hidden bg-linear-to-br from-purple-500 to-pink-500">
                           <img
                             src={event.images[0]}
                             alt={event.name}
@@ -650,7 +777,7 @@ export default function VenueDetailPage() {
                           />
                         </div>
                       ) : (
-                        <div className="aspect-video w-full bg-gradient-to-br from-purple-500 to-pink-500" />
+                        <div className="aspect-video w-full bg-linear-to-br from-purple-500 to-pink-500" />
                       )}
                       <CardContent className="p-6">
                         <div className="mb-2 flex items-start justify-between">
