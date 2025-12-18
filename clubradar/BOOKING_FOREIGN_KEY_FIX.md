@@ -38,7 +38,7 @@ If the foreign key constraint doesn't exist or is misconfigured, run this in Sup
 
 This ensures the foreign key constraint is properly set up.
 
-### Step 2: Deploy the Updated Code
+### Step 3: Deploy the Updated Code
 
 The fix is already in the code. You just need to:
 
@@ -50,7 +50,7 @@ The fix is already in the code. You just need to:
    ```
 2. Vercel will automatically redeploy
 
-### Step 3: Test
+### Step 4: Test
 
 After deployment:
 
@@ -61,12 +61,18 @@ After deployment:
 ## How It Works Now
 
 1. **User tries to book an event**
-2. **API checks if user exists** in `users` table
-3. **If user doesn't exist:**
-   - Creates a minimal user record with just the `id` (Clerk user ID)
-   - Other fields (name, email, phone, photo) are set to `null` initially
+2. **API uses UPSERT** to create or update user in `users` table:
+   - If user exists: Updates (no-op if nothing changed)
+   - If user doesn't exist: Creates minimal user record with `id` (Clerk user ID)
+   - Handles race conditions (multiple concurrent requests)
+3. **API verifies user exists** (double-check before booking)
 4. **Then creates the booking** (foreign key constraint is satisfied)
 5. **Returns success** to the user
+
+### Why UPSERT?
+- **Race condition safe**: Multiple booking requests won't conflict
+- **Idempotent**: Can be called multiple times safely
+- **Automatic**: No need to manually sync users before booking
 
 ## Future Improvement (Optional)
 

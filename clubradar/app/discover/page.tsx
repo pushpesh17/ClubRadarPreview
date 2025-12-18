@@ -30,6 +30,7 @@ interface Venue {
   id: string;
   name: string;
   description?: string;
+  images?: string[];
   address: string;
   city: string;
   pincode?: string;
@@ -70,8 +71,10 @@ export default function DiscoverPage() {
     try {
       setLoading(true);
       const cityParam = selectedCity === "all" ? "" : selectedCity;
-      const url = `/api/venues${cityParam ? `?city=${encodeURIComponent(cityParam)}` : ""}`;
-      
+      const url = `/api/venues${
+        cityParam ? `?city=${encodeURIComponent(cityParam)}` : ""
+      }`;
+
       const response = await fetch(url);
       const data = await response.json();
 
@@ -185,7 +188,8 @@ export default function DiscoverPage() {
             <>
               <div className="mb-6 flex items-center justify-between">
                 <h2 className="text-2xl font-bold">
-                  {filteredVenues.length} Venue{filteredVenues.length !== 1 ? "s" : ""} Found
+                  {filteredVenues.length} Venue
+                  {filteredVenues.length !== 1 ? "s" : ""} Found
                 </h2>
               </div>
 
@@ -193,10 +197,28 @@ export default function DiscoverPage() {
                 {filteredVenues.map((venue) => (
                   <Link key={venue.id} href={`/venue/${venue.id}`}>
                     <Card className="group h-full cursor-pointer transition-all hover:shadow-xl">
-                      <div className="aspect-video w-full overflow-hidden rounded-t-lg bg-gradient-to-br from-purple-500 to-pink-500">
-                        <div className="flex h-full items-center justify-center">
-                          <Building2 className="h-16 w-16 text-white opacity-80" />
-                        </div>
+                      <div className="relative aspect-video w-full overflow-hidden rounded-t-lg bg-gradient-to-br from-purple-500 to-pink-500">
+                        {venue.images && venue.images.length > 0 ? (
+                          <img
+                            src={venue.images[0]}
+                            alt={`${venue.name} photo`}
+                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                            loading="lazy"
+                            decoding="async"
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              // Fallback to gradient if image fails to load
+                              (
+                                e.currentTarget as HTMLImageElement
+                              ).style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center">
+                            <Building2 className="h-16 w-16 text-white opacity-80" />
+                          </div>
+                        )}
+                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
                       </div>
                       <CardContent className="p-6">
                         <div className="mb-2 flex items-start justify-between">

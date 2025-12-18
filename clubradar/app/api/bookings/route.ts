@@ -3,6 +3,49 @@ import { auth } from "@clerk/nextjs/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { generateQRCodeDataURL } from "@/lib/qrcode";
 
+async function fetchClerkUserProfile(userId: string) {
+  const secretKey = process.env.CLERK_SECRET_KEY;
+  if (!secretKey) return null;
+
+  try {
+    const res = await fetch(`https://api.clerk.com/v1/users/${userId}`, {
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        "Content-Type": "application/json",
+      },
+      // Avoid caching user PII
+      cache: "no-store",
+    });
+
+    if (!res.ok) return null;
+    const u: any = await res.json();
+
+    const primaryEmail =
+      u?.email_addresses?.find((e: any) => e?.id === u?.primary_email_address_id)?.email_address ??
+      u?.email_addresses?.[0]?.email_address ??
+      null;
+
+    const primaryPhone =
+      u?.phone_numbers?.find((p: any) => p?.id === u?.primary_phone_number_id)?.phone_number ??
+      u?.phone_numbers?.[0]?.phone_number ??
+      null;
+
+    const fullName =
+      (u?.first_name || u?.last_name)
+        ? `${u?.first_name || ""} ${u?.last_name || ""}`.trim()
+        : (u?.username || null);
+
+    return {
+      name: fullName,
+      email: primaryEmail,
+      phone: primaryPhone,
+      photo: u?.image_url ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // GET /api/bookings - Get user's bookings
 export async function GET(request: NextRequest) {
   try {
@@ -359,16 +402,18 @@ export async function POST(request: NextRequest) {
     // Ensure user exists in Supabase users table (required for foreign key constraint)
     // Use UPSERT to handle race conditions (multiple requests trying to create the same user)
     console.log("Ensuring user exists in database:", userId);
+
+    const clerkProfile = await fetchClerkUserProfile(userId);
     
     const { data: userData, error: userUpsertError } = await (supabase as any)
       .from("users")
       .upsert(
         {
           id: userId,
-          name: null,
-          email: null,
-          phone: null,
-          photo: null,
+          name: clerkProfile?.name ?? null,
+          email: clerkProfile?.email ?? null,
+          phone: clerkProfile?.phone ?? null,
+          photo: clerkProfile?.photo ?? null,
         },
         {
           onConflict: "id", // Use id as the conflict column
