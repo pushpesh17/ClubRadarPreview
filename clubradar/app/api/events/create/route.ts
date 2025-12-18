@@ -5,7 +5,7 @@ export async function POST(request: NextRequest) {
   try {
     // Get authenticated user from Clerk
     const { userId } = await auth();
-    
+
     if (!userId) {
       return NextResponse.json(
         { error: "Unauthorized. Please login first." },
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     // Use service role key to bypass RLS (needed for Clerk auth)
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    
+
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error("Missing Supabase configuration");
       return NextResponse.json(
@@ -26,7 +26,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Create Supabase client with service role key (bypasses RLS)
-    const { createClient: createServiceClient } = await import("@supabase/supabase-js");
+    const { createClient: createServiceClient } = await import(
+      "@supabase/supabase-js"
+    );
     const supabase = createServiceClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
@@ -45,10 +47,10 @@ export async function POST(request: NextRequest) {
     if (venueError) {
       console.error("Error fetching venue:", venueError);
       return NextResponse.json(
-        { 
+        {
           error: "Failed to fetch venue",
           message: venueError.message,
-          details: "Please try again or contact support."
+          details: "Please try again or contact support.",
         },
         { status: 500 }
       );
@@ -56,9 +58,10 @@ export async function POST(request: NextRequest) {
 
     if (!venue) {
       return NextResponse.json(
-        { 
+        {
           error: "No approved venue found",
-          message: "Please register your venue and wait for approval before creating events."
+          message:
+            "Please register your venue and wait for approval before creating events.",
         },
         { status: 403 }
       );
@@ -80,9 +83,19 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Validate required fields
-    if (!name || !date || !time || !genre || !price || !capacity) {
+    if (
+      !name ||
+      !date ||
+      !time ||
+      !genre ||
+      price === undefined ||
+      price === null
+    ) {
       return NextResponse.json(
-        { error: "Missing required fields: name, date, time, genre, price, and capacity are required" },
+        {
+          error:
+            "Missing required fields: name, date, time, genre, and price are required",
+        },
         { status: 400 }
       );
     }
@@ -92,14 +105,6 @@ export async function POST(request: NextRequest) {
     if (eventDate < new Date()) {
       return NextResponse.json(
         { error: "Event date and time cannot be in the past" },
-        { status: 400 }
-      );
-    }
-
-    // Validate capacity
-    if (capacity <= 0) {
-      return NextResponse.json(
-        { error: "Capacity must be greater than 0" },
         { status: 400 }
       );
     }
@@ -123,7 +128,8 @@ export async function POST(request: NextRequest) {
         time,
         genre,
         price: parseFloat(price),
-        capacity: parseInt(capacity),
+        // Capacity removed: treat as "unlimited". Keep a very high cap for compatibility with existing schema/UI.
+        capacity: capacity ? parseInt(capacity) : 1000000,
         booked: 0,
         dress_code: dressCode || null,
         images: images || [],
@@ -172,4 +178,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

@@ -21,19 +21,22 @@ async function fetchClerkUserProfile(userId: string) {
     const u: any = await res.json();
 
     const primaryEmail =
-      u?.email_addresses?.find((e: any) => e?.id === u?.primary_email_address_id)?.email_address ??
+      u?.email_addresses?.find(
+        (e: any) => e?.id === u?.primary_email_address_id
+      )?.email_address ??
       u?.email_addresses?.[0]?.email_address ??
       null;
 
     const primaryPhone =
-      u?.phone_numbers?.find((p: any) => p?.id === u?.primary_phone_number_id)?.phone_number ??
+      u?.phone_numbers?.find((p: any) => p?.id === u?.primary_phone_number_id)
+        ?.phone_number ??
       u?.phone_numbers?.[0]?.phone_number ??
       null;
 
     const fullName =
-      (u?.first_name || u?.last_name)
+      u?.first_name || u?.last_name
         ? `${u?.first_name || ""} ${u?.last_name || ""}`.trim()
-        : (u?.username || null);
+        : u?.username || null;
 
     return {
       name: fullName,
@@ -51,7 +54,7 @@ export async function GET(request: NextRequest) {
   try {
     // Get authenticated user from Clerk
     const { userId } = await auth();
-    
+
     if (!userId) {
       return NextResponse.json(
         { error: "Unauthorized. Please login first." },
@@ -62,7 +65,7 @@ export async function GET(request: NextRequest) {
     // Use service role key to bypass RLS (needed for Clerk auth)
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    
+
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error("Missing Supabase configuration");
       return NextResponse.json(
@@ -88,7 +91,7 @@ export async function GET(request: NextRequest) {
       .from("bookings")
       .select("id, user_id")
       .limit(10);
-    
+
     console.log("Sample bookings in database:", {
       count: allBookings?.length || 0,
       sample: allBookings?.slice(0, 3),
@@ -110,7 +113,8 @@ export async function GET(request: NextRequest) {
     // Now get bookings with joins
     const { data, error } = await supabase
       .from("bookings")
-      .select(`
+      .select(
+        `
         *,
         events (
           id,
@@ -127,7 +131,8 @@ export async function GET(request: NextRequest) {
             pincode
           )
         )
-      `)
+      `
+      )
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
 
@@ -139,33 +144,42 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error("Supabase query error:", error);
-      
+
       // Check if it's a network/connection error
-      if (error.message?.includes("fetch failed") || error.message?.includes("TypeError")) {
+      if (
+        error.message?.includes("fetch failed") ||
+        error.message?.includes("TypeError")
+      ) {
         return NextResponse.json(
-          { 
+          {
             error: "Database connection failed",
-            details: "Unable to connect to Supabase. Please check: 1) Your internet connection, 2) Supabase URL and service role key in .env.local, 3) Supabase project status",
-            hint: "Verify NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are correct"
+            details:
+              "Unable to connect to Supabase. Please check: 1) Your internet connection, 2) Supabase URL and service role key in .env.local, 3) Supabase project status",
+            hint: "Verify NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are correct",
           },
           { status: 503 }
         );
       }
-      
+
       // Check if table doesn't exist
-      if (error.code === 'PGRST205' || error.message?.includes("Could not find the table") || error.message?.includes("schema cache")) {
+      if (
+        error.code === "PGRST205" ||
+        error.message?.includes("Could not find the table") ||
+        error.message?.includes("schema cache")
+      ) {
         return NextResponse.json(
-          { 
+          {
             error: "Bookings table not found",
-            details: "The bookings table doesn't exist in your Supabase database. Please run the SQL script to create it.",
+            details:
+              "The bookings table doesn't exist in your Supabase database. Please run the SQL script to create it.",
             hint: "Go to Supabase Dashboard → SQL Editor → Run 'supabase/create-bookings-table.sql' script",
             code: error.code,
-            fix: "Run the create-bookings-table.sql script in Supabase SQL Editor"
+            fix: "Run the create-bookings-table.sql script in Supabase SQL Editor",
           },
           { status: 400 }
         );
       }
-      
+
       // If join failed but we have bookings, try without joins
       if (bookingsCheck && bookingsCheck.length > 0) {
         console.log("Join failed but bookings exist, fetching without joins");
@@ -182,7 +196,8 @@ export async function GET(request: NextRequest) {
             bookingsOnly.map(async (booking) => {
               const { data: event } = await supabase
                 .from("events")
-                .select(`
+                .select(
+                  `
                   id,
                   name,
                   date,
@@ -191,7 +206,8 @@ export async function GET(request: NextRequest) {
                   price,
                   location,
                   venue_id
-                `)
+                `
+                )
                 .eq("id", booking.event_id)
                 .maybeSingle();
 
@@ -215,21 +231,27 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ bookings: bookingsWithEvents });
         }
       }
-      
+
       return NextResponse.json(
-        { 
+        {
           error: error.message || "Failed to fetch bookings",
           details: error.details,
           hint: error.hint,
-          code: error.code
+          code: error.code,
         },
         { status: 400 }
       );
     }
 
     // If no error but no data, check if bookings exist without joins
-    if ((!data || data.length === 0) && bookingsCheck && bookingsCheck.length > 0) {
-      console.log("No data from joined query but bookings exist, using fallback");
+    if (
+      (!data || data.length === 0) &&
+      bookingsCheck &&
+      bookingsCheck.length > 0
+    ) {
+      console.log(
+        "No data from joined query but bookings exist, using fallback"
+      );
       // Use the bookings we found earlier and fetch event data manually
       const { data: bookingsOnly } = await supabase
         .from("bookings")
@@ -242,7 +264,8 @@ export async function GET(request: NextRequest) {
           bookingsOnly.map(async (booking) => {
             const { data: event } = await supabase
               .from("events")
-              .select(`
+              .select(
+                `
                 id,
                 name,
                 date,
@@ -251,7 +274,8 @@ export async function GET(request: NextRequest) {
                 price,
                 location,
                 venue_id
-              `)
+              `
+              )
               .eq("id", booking.event_id)
               .maybeSingle();
 
@@ -279,23 +303,28 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ bookings: data || [] });
   } catch (error: any) {
     console.error("Unexpected error in GET /api/bookings:", error);
-    
+
     // Check if it's a network/connection error
-    if (error.message?.includes("fetch failed") || error.message?.includes("TypeError") || error.name === "TypeError") {
+    if (
+      error.message?.includes("fetch failed") ||
+      error.message?.includes("TypeError") ||
+      error.name === "TypeError"
+    ) {
       return NextResponse.json(
-        { 
+        {
           error: "Database connection failed",
-          details: "Unable to connect to Supabase. Please check: 1) Your internet connection, 2) Supabase URL and service role key in .env.local, 3) Supabase project status",
-          hint: "Verify NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are correct"
+          details:
+            "Unable to connect to Supabase. Please check: 1) Your internet connection, 2) Supabase URL and service role key in .env.local, 3) Supabase project status",
+          hint: "Verify NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are correct",
         },
         { status: 503 }
       );
     }
-    
+
     return NextResponse.json(
-      { 
+      {
         error: error.message || "Failed to fetch bookings",
-        details: "An unexpected error occurred. Please try again later."
+        details: "An unexpected error occurred. Please try again later.",
       },
       { status: 500 }
     );
@@ -307,7 +336,7 @@ export async function POST(request: NextRequest) {
   try {
     // Get authenticated user from Clerk
     const { userId } = await auth();
-    
+
     if (!userId) {
       return NextResponse.json(
         { error: "Unauthorized. Please login first." },
@@ -318,16 +347,17 @@ export async function POST(request: NextRequest) {
     // Use service role key to bypass RLS (needed for Clerk auth)
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    
+
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error("Missing Supabase configuration:", {
         hasUrl: !!supabaseUrl,
         hasKey: !!supabaseServiceKey,
       });
       return NextResponse.json(
-        { 
+        {
           error: "Server configuration error. Missing Supabase credentials.",
-          details: "Please check your .env.local file for NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY"
+          details:
+            "Please check your .env.local file for NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY",
         },
         { status: 500 }
       );
@@ -339,9 +369,10 @@ export async function POST(request: NextRequest) {
     } catch (urlError) {
       console.error("Invalid Supabase URL format:", supabaseUrl);
       return NextResponse.json(
-        { 
+        {
           error: "Invalid Supabase URL format",
-          details: "NEXT_PUBLIC_SUPABASE_URL must be a valid URL (e.g., https://xxxxx.supabase.co)"
+          details:
+            "NEXT_PUBLIC_SUPABASE_URL must be a valid URL (e.g., https://xxxxx.supabase.co)",
         },
         { status: 500 }
       );
@@ -359,9 +390,10 @@ export async function POST(request: NextRequest) {
     } catch (clientError: any) {
       console.error("Failed to create Supabase client:", clientError);
       return NextResponse.json(
-        { 
+        {
           error: "Failed to initialize database connection",
-          details: clientError.message || "Please check your Supabase credentials"
+          details:
+            clientError.message || "Please check your Supabase credentials",
         },
         { status: 500 }
       );
@@ -377,34 +409,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate event exists and has capacity
+    // Validate event exists
     const { data: event, error: eventError } = await supabase
       .from("events")
-      .select("id, capacity, booked, price")
+      .select("id, booked, price")
       .eq("id", event_id)
       .single();
 
     if (eventError || !event) {
-      return NextResponse.json(
-        { error: "Event not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
 
-    // Check capacity
-    if ((event.booked || 0) + number_of_people > event.capacity) {
-      return NextResponse.json(
-        { error: "Not enough capacity available" },
-        { status: 400 }
-      );
-    }
+    // Capacity removed: bookings are allowed without a hard limit.
 
     // Ensure user exists in Supabase users table (required for foreign key constraint)
     // Use UPSERT to handle race conditions (multiple requests trying to create the same user)
     console.log("Ensuring user exists in database:", userId);
 
     const clerkProfile = await fetchClerkUserProfile(userId);
-    
+
     const { data: userData, error: userUpsertError } = await (supabase as any)
       .from("users")
       .upsert(
@@ -428,7 +451,7 @@ export async function POST(request: NextRequest) {
       console.error("User ID:", userId);
       console.error("Error code:", userUpsertError.code);
       console.error("Error message:", userUpsertError.message);
-      
+
       // If it's a duplicate key error, try to fetch the existing user
       if (userUpsertError.code === "23505") {
         console.log("Duplicate key error, fetching existing user...");
@@ -437,27 +460,28 @@ export async function POST(request: NextRequest) {
           .select("id")
           .eq("id", userId)
           .maybeSingle();
-        
+
         if (existingUser) {
           console.log("User exists, continuing with booking...");
         } else {
           return NextResponse.json(
-            { 
+            {
               error: "Failed to sync user account",
-              details: "User account could not be created or found in the database",
+              details:
+                "User account could not be created or found in the database",
               code: userUpsertError.code,
-              hint: "Please try logging out and logging back in, then try booking again."
+              hint: "Please try logging out and logging back in, then try booking again.",
             },
             { status: 500 }
           );
         }
       } else {
         return NextResponse.json(
-          { 
+          {
             error: "Failed to sync user account",
             details: userUpsertError.message,
             code: userUpsertError.code,
-            hint: "Please ensure your user account is properly synced. Try logging out and logging back in."
+            hint: "Please ensure your user account is properly synced. Try logging out and logging back in.",
           },
           { status: 500 }
         );
@@ -476,22 +500,26 @@ export async function POST(request: NextRequest) {
     if (verifyError && verifyError.code !== "PGRST116") {
       console.error("Error verifying user after upsert:", verifyError);
       return NextResponse.json(
-        { 
+        {
           error: "Failed to verify user account",
           details: "User account was not properly created. Please try again.",
-          hint: "Try logging out and logging back in, then attempt the booking again."
+          hint: "Try logging out and logging back in, then attempt the booking again.",
         },
         { status: 500 }
       );
     }
 
     if (!verifyUser) {
-      console.error("User does not exist after upsert attempt. User ID:", userId);
+      console.error(
+        "User does not exist after upsert attempt. User ID:",
+        userId
+      );
       return NextResponse.json(
-        { 
+        {
           error: "User account not found",
-          details: "Your user account could not be found in the database. Please try logging out and logging back in.",
-          hint: "After logging back in, wait a moment and try booking again."
+          details:
+            "Your user account could not be found in the database. Please try logging out and logging back in.",
+          hint: "After logging back in, wait a moment and try booking again.",
         },
         { status: 500 }
       );
@@ -526,43 +554,48 @@ export async function POST(request: NextRequest) {
 
     if (bookingError) {
       console.error("Error creating booking:", bookingError);
-      
+
       // Check if it's a foreign key constraint error
       if (
-        bookingError.code === "23503" || 
+        bookingError.code === "23503" ||
         bookingError.message?.includes("foreign key constraint") ||
         bookingError.message?.includes("bookings_user_id_fkey")
       ) {
         return NextResponse.json(
-          { 
+          {
             error: "User account not found",
-            details: "Your user account needs to be synced to the database. Please try logging out and logging back in, then try booking again.",
+            details:
+              "Your user account needs to be synced to the database. Please try logging out and logging back in, then try booking again.",
             hint: "The user account must exist in the users table before creating a booking. This should happen automatically when you log in.",
             code: bookingError.code,
-            fix: "Try logging out and logging back in, or contact support if the issue persists."
+            fix: "Try logging out and logging back in, or contact support if the issue persists.",
           },
           { status: 400 }
         );
       }
-      
+
       // Check if it's a network/connection error
-      if (bookingError.message?.includes("fetch failed") || bookingError.message?.includes("TypeError")) {
+      if (
+        bookingError.message?.includes("fetch failed") ||
+        bookingError.message?.includes("TypeError")
+      ) {
         return NextResponse.json(
-          { 
+          {
             error: "Database connection failed",
-            details: "Unable to connect to Supabase. Please check: 1) Your internet connection, 2) Supabase URL and service role key in .env.local, 3) Supabase project status",
-            hint: "Verify NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are correct"
+            details:
+              "Unable to connect to Supabase. Please check: 1) Your internet connection, 2) Supabase URL and service role key in .env.local, 3) Supabase project status",
+            hint: "Verify NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are correct",
           },
           { status: 503 }
         );
       }
-      
+
       return NextResponse.json(
-        { 
+        {
           error: bookingError.message || "Failed to create booking",
           details: bookingError.details,
           hint: bookingError.hint,
-          code: bookingError.code
+          code: bookingError.code,
         },
         { status: 400 }
       );
@@ -581,35 +614,42 @@ export async function POST(request: NextRequest) {
       // Don't fail the booking, just log the error
     }
 
-    return NextResponse.json({ 
-      success: true,
-      booking: {
-        ...booking,
-        qr_code: qrCodeDataURL,
-      }
-    }, { status: 201 });
+    return NextResponse.json(
+      {
+        success: true,
+        booking: {
+          ...booking,
+          qr_code: qrCodeDataURL,
+        },
+      },
+      { status: 201 }
+    );
   } catch (error: any) {
     console.error("Booking creation error:", error);
-    
+
     // Check if it's a network/connection error
-    if (error.message?.includes("fetch failed") || error.message?.includes("TypeError") || error.name === "TypeError") {
+    if (
+      error.message?.includes("fetch failed") ||
+      error.message?.includes("TypeError") ||
+      error.name === "TypeError"
+    ) {
       return NextResponse.json(
-        { 
+        {
           error: "Database connection failed",
-          details: "Unable to connect to Supabase. Please check: 1) Your internet connection, 2) Supabase URL and service role key in .env.local, 3) Supabase project status",
-          hint: "Verify NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are correct"
+          details:
+            "Unable to connect to Supabase. Please check: 1) Your internet connection, 2) Supabase URL and service role key in .env.local, 3) Supabase project status",
+          hint: "Verify NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are correct",
         },
         { status: 503 }
       );
     }
-    
+
     return NextResponse.json(
-      { 
+      {
         error: error.message || "Failed to create booking",
-        details: "An unexpected error occurred. Please try again later."
+        details: "An unexpected error occurred. Please try again later.",
       },
       { status: 500 }
     );
   }
 }
-

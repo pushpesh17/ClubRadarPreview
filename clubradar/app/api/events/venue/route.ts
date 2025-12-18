@@ -57,8 +57,11 @@ export async function GET(request: NextRequest) {
       .from("events")
       .select("*")
       .eq("venue_id", venue.id)
-      .order("date", { ascending: true })
-      .order("time", { ascending: true });
+      // Most recent events first (newly created events appear at top)
+      // Prefer created_at if available; fallback ordering is still fine if column exists.
+      .order("created_at", { ascending: false })
+      .order("date", { ascending: false })
+      .order("time", { ascending: false });
 
     if (eventsError) {
       console.error("Error fetching events:", eventsError);

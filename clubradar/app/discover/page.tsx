@@ -38,6 +38,7 @@ interface Venue {
   email?: string;
   status: string;
   activeEventsCount: number;
+  booking_paused?: boolean;
 }
 
 const popularCities = [
@@ -227,10 +228,14 @@ export default function DiscoverPage() {
                           </h3>
                           <Badge
                             variant="secondary"
-                            className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                            className={
+                              venue.booking_paused
+                                ? "bg-yellow-100 text-yellow-900 dark:bg-yellow-900 dark:text-yellow-200"
+                                : "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                            }
                           >
                             <CheckCircle2 className="mr-1 h-3 w-3" />
-                            Open
+                            {venue.booking_paused ? "Paused" : "Open"}
                           </Badge>
                         </div>
 

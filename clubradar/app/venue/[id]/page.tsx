@@ -64,6 +64,7 @@ interface Venue {
   amenities?: string[];
   rating?: number;
   opening_hours?: any;
+  booking_paused?: boolean;
 }
 
 interface Event {
@@ -211,6 +212,12 @@ export default function VenueDetailPage() {
     if (!user) {
       toast.error("Please login to book events");
       router.push(`/login?redirect=/venue/${venueId}`);
+      return;
+    }
+    if (venue?.booking_paused) {
+      toast.error(
+        "Bookings are currently paused by the venue. Please try again later."
+      );
       return;
     }
 
@@ -758,8 +765,9 @@ export default function VenueDetailPage() {
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {events.map((event) => {
                   const isActive = isEventActive(event);
-                  const available = event.capacity - event.booked;
-                  const isSoldOut = available <= 0;
+                  // Capacity removed: treat availability as unlimited.
+                  const available = Number.POSITIVE_INFINITY;
+                  const isSoldOut = false;
 
                   return (
                     <Card
@@ -813,9 +821,7 @@ export default function VenueDetailPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <Users className="h-4 w-4" />
-                            <span>
-                              {available} / {event.capacity} available
-                            </span>
+                            <span>Unlimited booking available</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <IndianRupee className="h-4 w-4" />
@@ -1011,7 +1017,7 @@ export default function VenueDetailPage() {
                       <Input
                         type="number"
                         min="1"
-                        max={selectedEvent.capacity - selectedEvent.booked}
+                        max={100}
                         value={numberOfPeople}
                         onChange={(e) =>
                           setNumberOfPeople(
@@ -1047,8 +1053,7 @@ export default function VenueDetailPage() {
                       </Button>
                     </div>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Available: {selectedEvent.capacity - selectedEvent.booked}{" "}
-                      tickets
+                      Available: Unlimited
                     </p>
                   </div>
                   <div className="rounded-lg bg-muted p-4">
