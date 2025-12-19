@@ -401,10 +401,10 @@ export default function VenueDetailPage() {
             Back to Discover
           </Link>
 
-          {/* Hero Image Gallery - Enhanced for Large Screens */}
+          {/* Hero Image Gallery - Enhanced for Large Screens (balanced size) */}
           {hasImages ? (
             <div className="mb-8 lg:mb-12">
-              <div className="relative h-64 md:h-96 lg:h-[600px] xl:h-[700px] w-full rounded-2xl lg:rounded-3xl overflow-hidden bg-gradient-to-br from-purple-500 to-pink-500 shadow-2xl">
+              <div className="relative h-56 md:h-80 lg:h-[420px] xl:h-[480px] w-full rounded-2xl lg:rounded-3xl overflow-hidden bg-gradient-to-br from-purple-500 to-pink-500 shadow-2xl">
                 <img
                   src={venueImages[0]}
                   alt={venue.name}
@@ -447,7 +447,7 @@ export default function VenueDetailPage() {
               )}
             </div>
           ) : (
-            <div className="mb-8 lg:mb-12 h-64 md:h-96 lg:h-[600px] xl:h-[700px] w-full rounded-2xl lg:rounded-3xl overflow-hidden bg-gradient-to-br from-purple-500 via-pink-500 to-purple-600 flex items-center justify-center shadow-2xl">
+            <div className="mb-8 lg:mb-12 h-56 md:h-80 lg:h-[420px] xl:h-[480px] w-full rounded-2xl lg:rounded-3xl overflow-hidden bg-gradient-to-br from-purple-500 via-pink-500 to-purple-600 flex items-center justify-center shadow-2xl">
               <div className="text-center text-white/90">
                 <ImageIcon className="h-20 w-20 lg:h-24 lg:w-24 mx-auto mb-4 opacity-60" />
                 <p className="text-lg lg:text-xl font-medium">
