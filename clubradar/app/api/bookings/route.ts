@@ -409,15 +409,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate event exists
+    // Validate event exists and fetch details for email
     const { data: event, error: eventError } = await supabase
       .from("events")
-      .select("id, booked, price")
+      .select("id, name, date, time, booked, price, venue_id")
       .eq("id", event_id)
       .single();
 
     if (eventError || !event) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+
+    // Fetch venue details for email
+    let venueDetails = null;
+    if (event.venue_id) {
+      const { data: venue } = await supabase
+        .from("venues")
+        .select("name, address, city")
+        .eq("id", event.venue_id)
+        .single();
+      venueDetails = venue;
     }
 
     // Capacity removed: bookings are allowed without a hard limit.
@@ -612,6 +623,57 @@ export async function POST(request: NextRequest) {
     if (updateError) {
       console.error("Error updating event booked count:", updateError);
       // Don't fail the booking, just log the error
+    }
+
+    // Send confirmation email (non-blocking - don't fail booking if email fails)
+    if (clerkProfile?.email && event.name) {
+      // Send email asynchronously without blocking the response
+      (async () => {
+        try {
+          const baseUrl =
+            process.env.NEXT_PUBLIC_APP_URL ||
+            (process.env.VERCEL_URL
+              ? `https://${process.env.VERCEL_URL}`
+              : "http://localhost:3000");
+
+          const emailResponse = await fetch(
+            `${baseUrl}/api/bookings/send-confirmation-email`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                userEmail: clerkProfile.email,
+                userName: clerkProfile.name || "Guest",
+                bookingId: bookingId,
+                eventName: event.name,
+                eventDate: event.date,
+                eventTime: event.time || "TBD",
+                venueName: venueDetails?.name || "Venue",
+                venueAddress: venueDetails
+                  ? `${venueDetails.address}, ${venueDetails.city}`
+                  : "Address not available",
+                numberOfPeople: parseInt(number_of_people),
+                totalPrice: totalPrice,
+                qrCodeUrl: qrCodeDataURL,
+              }),
+            }
+          );
+
+          if (emailResponse.ok) {
+            console.log("Booking confirmation email sent successfully");
+          } else {
+            const errorText = await emailResponse.text();
+            console.warn("Failed to send booking confirmation email:", errorText);
+          }
+        } catch (emailError: any) {
+          console.error("Error sending booking confirmation email:", emailError);
+          // Don't fail the booking if email fails
+        }
+      })(); // Immediately invoke async function
+    } else {
+      console.warn("Skipping email send - missing email or event name");
     }
 
     return NextResponse.json(

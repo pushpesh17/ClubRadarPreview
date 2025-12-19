@@ -390,31 +390,32 @@ export default function VenueDetailPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Navbar />
-      <div className="flex-1 bg-linear-to-br from-purple-50 via-pink-50 to-white dark:from-purple-950 dark:via-pink-950 dark:to-black">
-        <div className="container px-4 py-8">
+      <div className="flex-1 bg-gradient-to-br from-purple-50 via-pink-50 to-white dark:from-purple-950 dark:via-pink-950 dark:to-black">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-6 lg:py-10 max-w-7xl">
           {/* Back Button */}
           <Link
             href="/discover"
-            className="mb-6 inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="mb-6 lg:mb-8 inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
           >
-            <ArrowLeft className="mr-2 h-4 w-4" />
+            <ArrowLeft className="mr-2 h-4 w-4 group-hover:-translate-x-1 transition-transform" />
             Back to Discover
           </Link>
 
-          {/* Image Gallery */}
+          {/* Hero Image Gallery - Enhanced for Large Screens */}
           {hasImages ? (
-            <div className="mb-8">
-              <div className="relative h-64 md:h-96 lg:h-[500px] w-full rounded-2xl overflow-hidden bg-linear-to-br from-purple-500 to-pink-500">
+            <div className="mb-8 lg:mb-12">
+              <div className="relative h-64 md:h-96 lg:h-[600px] xl:h-[700px] w-full rounded-2xl lg:rounded-3xl overflow-hidden bg-gradient-to-br from-purple-500 to-pink-500 shadow-2xl">
                 <img
                   src={venueImages[0]}
                   alt={venue.name}
-                  className="h-full w-full object-cover cursor-pointer"
+                  className="h-full w-full object-cover cursor-pointer transition-transform duration-700 hover:scale-105"
                   onClick={() => setSelectedImageIndex(0)}
                 />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                 {venueImages.length > 1 && (
                   <button
                     onClick={() => setSelectedImageIndex(0)}
-                    className="absolute bottom-4 right-4 bg-black/50 hover:bg-black/70 text-white px-4 py-2 rounded-lg text-sm font-medium backdrop-blur-sm transition-colors"
+                    className="absolute bottom-6 right-6 bg-white/90 hover:bg-white text-gray-900 px-5 py-2.5 rounded-xl text-sm font-semibold backdrop-blur-md transition-all shadow-lg hover:shadow-xl hover:scale-105"
                   >
                     <ImageIcon className="mr-2 h-4 w-4 inline" />
                     View All {venueImages.length} Photos
@@ -422,21 +423,22 @@ export default function VenueDetailPage() {
                 )}
               </div>
               {venueImages.length > 1 && (
-                <div className="mt-4 grid grid-cols-4 gap-2">
-                  {venueImages.slice(1, 5).map((img, idx) => (
+                <div className="mt-4 lg:mt-6 grid grid-cols-4 lg:grid-cols-5 gap-2 lg:gap-3">
+                  {venueImages.slice(1, 6).map((img, idx) => (
                     <div
                       key={idx + 1}
-                      className="relative aspect-video rounded-lg overflow-hidden bg-muted cursor-pointer group"
+                      className="relative aspect-video rounded-xl lg:rounded-2xl overflow-hidden bg-muted cursor-pointer group shadow-md hover:shadow-xl transition-all"
                       onClick={() => setSelectedImageIndex(idx + 1)}
                     >
                       <img
                         src={img}
                         alt={`${venue.name} ${idx + 2}`}
-                        className="h-full w-full object-cover group-hover:scale-110 transition-transform"
+                        className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-300"
                       />
-                      {idx === 3 && venueImages.length > 5 && (
-                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white font-semibold">
-                          +{venueImages.length - 5} more
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                      {idx === 4 && venueImages.length > 6 && (
+                        <div className="absolute inset-0 bg-black/70 flex items-center justify-center text-white font-bold text-sm lg:text-base">
+                          +{venueImages.length - 6} more
                         </div>
                       )}
                     </div>
@@ -445,73 +447,77 @@ export default function VenueDetailPage() {
               )}
             </div>
           ) : (
-            <div className="mb-8 h-64 md:h-96 lg:h-[500px] w-full rounded-2xl overflow-hidden bg-linear-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-              <div className="text-center text-white/80">
-                <ImageIcon className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p className="text-lg">No photos available</p>
+            <div className="mb-8 lg:mb-12 h-64 md:h-96 lg:h-[600px] xl:h-[700px] w-full rounded-2xl lg:rounded-3xl overflow-hidden bg-gradient-to-br from-purple-500 via-pink-500 to-purple-600 flex items-center justify-center shadow-2xl">
+              <div className="text-center text-white/90">
+                <ImageIcon className="h-20 w-20 lg:h-24 lg:w-24 mx-auto mb-4 opacity-60" />
+                <p className="text-lg lg:text-xl font-medium">
+                  No photos available
+                </p>
               </div>
             </div>
           )}
 
-          {/* Venue Header */}
-          <Card className="mb-8 shadow-lg">
-            <CardContent className="p-6 md:p-8">
-              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
-                <div className="flex-1">
-                  <div className="mb-3 flex flex-wrap items-center gap-3">
-                    <h1 className="text-3xl md:text-4xl font-bold">
+          {/* Venue Header - Enhanced Layout */}
+          <Card className="mb-8 lg:mb-12 shadow-xl border-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
+            <CardContent className="p-6 md:p-8 lg:p-10">
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 lg:gap-8">
+                <div className="flex-1 space-y-4 lg:space-y-6">
+                  <div className="flex flex-wrap items-center gap-3 lg:gap-4">
+                    <h1 className="text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
                       {venue.name}
                     </h1>
-                    <Badge
-                      variant="secondary"
-                      className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                    >
-                      <CheckCircle2 className="mr-1 h-3 w-3" />
-                      Open
-                    </Badge>
-                    {averageRating > 0 && (
-                      <div className="flex items-center gap-1">
-                        <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-                        <span className="font-semibold">
-                          {averageRating.toFixed(1)}
-                        </span>
-                        <span className="text-sm text-muted-foreground">
-                          ({reviews.length}{" "}
-                          {reviews.length === 1 ? "review" : "reviews"})
-                        </span>
-                      </div>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2 lg:gap-3">
+                      <Badge
+                        variant="secondary"
+                        className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-3 py-1 text-sm font-semibold"
+                      >
+                        <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                        {venue.booking_paused ? "Paused" : "Open"}
+                      </Badge>
+                      {averageRating > 0 && (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800">
+                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                          <span className="font-bold text-base">
+                            {averageRating.toFixed(1)}
+                          </span>
+                          <span className="text-xs text-muted-foreground ml-1">
+                            ({reviews.length}{" "}
+                            {reviews.length === 1 ? "review" : "reviews"})
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   {venue.description && (
-                    <p className="mb-4 text-base text-muted-foreground leading-relaxed">
+                    <p className="text-base lg:text-lg text-muted-foreground leading-relaxed max-w-4xl">
                       {venue.description}
                     </p>
                   )}
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span>
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-start gap-3 text-sm lg:text-base">
+                      <MapPin className="h-5 w-5 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
+                      <span className="text-muted-foreground">
                         {venue.address}, {venue.city}
+                        {venue.pincode && ` - ${venue.pincode}`}
                       </span>
-                      {venue.pincode && <span> - {venue.pincode}</span>}
                     </div>
                     {venue.phone && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <div className="flex items-center gap-3 text-sm lg:text-base">
+                        <Phone className="h-5 w-5 text-purple-600 dark:text-purple-400 shrink-0" />
                         <a
                           href={`tel:${venue.phone}`}
-                          className="hover:text-primary transition-colors"
+                          className="text-muted-foreground hover:text-purple-600 dark:hover:text-purple-400 transition-colors font-medium"
                         >
                           {venue.phone}
                         </a>
                       </div>
                     )}
                     {venue.email && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <div className="flex items-center gap-3 text-sm lg:text-base">
+                        <Mail className="h-5 w-5 text-purple-600 dark:text-purple-400 shrink-0" />
                         <a
                           href={`mailto:${venue.email}`}
-                          className="hover:text-primary transition-colors"
+                          className="text-muted-foreground hover:text-purple-600 dark:hover:text-purple-400 transition-colors font-medium break-all"
                         >
                           {venue.email}
                         </a>
@@ -519,29 +525,33 @@ export default function VenueDetailPage() {
                     )}
                   </div>
                 </div>
-                <div className="text-center md:text-right">
-                  <div className="text-3xl font-bold text-purple-600">
-                    {events.length}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Active Events
+                <div className="lg:min-w-[200px] lg:text-right">
+                  <div className="inline-block p-6 lg:p-8 rounded-2xl bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 border-2 border-purple-200 dark:border-purple-800">
+                    <div className="text-4xl lg:text-5xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                      {events.length}
+                    </div>
+                    <div className="text-sm lg:text-base font-semibold text-muted-foreground mt-2">
+                      Active Events
+                    </div>
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Amenities Section */}
+          {/* Amenities Section - Enhanced */}
           {venue.amenities && venue.amenities.length > 0 && (
-            <Card className="mb-8">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-purple-600" />
-                  Amenities
+            <Card className="mb-8 lg:mb-12 shadow-lg border-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center gap-3 text-xl lg:text-2xl">
+                  <div className="p-2 rounded-xl bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30">
+                    <Sparkles className="h-5 w-5 lg:h-6 lg:w-6 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  Amenities & Features
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 lg:gap-6">
                   {venue.amenities.map((amenity, idx) => {
                     const iconMap: Record<string, any> = {
                       wifi: Wifi,
@@ -553,10 +563,14 @@ export default function VenueDetailPage() {
                     return (
                       <div
                         key={idx}
-                        className="flex items-center gap-2 text-sm"
+                        className="flex flex-col items-center gap-2 p-4 rounded-xl bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-100 dark:border-purple-800 hover:shadow-md transition-all hover:scale-105"
                       >
-                        <Icon className="h-4 w-4 text-purple-600" />
-                        <span className="capitalize">{amenity}</span>
+                        <div className="p-2.5 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
+                          <Icon className="h-5 w-5 lg:h-6 lg:w-6 text-purple-600 dark:text-purple-400" />
+                        </div>
+                        <span className="text-sm lg:text-base font-medium capitalize text-center">
+                          {amenity}
+                        </span>
                       </div>
                     );
                   })}
@@ -565,64 +579,78 @@ export default function VenueDetailPage() {
             </Card>
           )}
 
-          {/* Reviews Section */}
-          <Card className="mb-8">
-            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Star className="h-5 w-5 text-yellow-500" />
-                Reviews
-                {averageRating > 0 && (
-                  <span className="text-base font-normal text-muted-foreground">
-                    ({averageRating.toFixed(1)})
-                  </span>
-                )}
-              </CardTitle>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-                <Select
-                  value={reviewsSort}
-                  onValueChange={(v) => {
-                    const next = v as any as "recent" | "helpful" | "rating";
-                    setReviewsSort(next);
-                    setReviewsPage(1);
-                    loadReviews(1, next, true);
-                  }}
-                >
-                  <SelectTrigger className="h-10 w-full sm:h-9 sm:w-[160px]">
-                    <SelectValue placeholder="Sort" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="recent">Most recent</SelectItem>
-                    <SelectItem value="helpful">Most helpful</SelectItem>
-                    <SelectItem value="rating">Highest rated</SelectItem>
-                  </SelectContent>
-                </Select>
+          {/* Reviews Section - Enhanced */}
+          <Card className="mb-8 lg:mb-12 shadow-xl border-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
+            <CardHeader className="pb-4 lg:pb-6">
+              <div className="flex flex-col gap-4 lg:gap-6 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex items-center gap-3 lg:gap-4">
+                  <div className="p-2.5 lg:p-3 rounded-xl bg-gradient-to-br from-yellow-100 to-orange-100 dark:from-yellow-900/30 dark:to-orange-900/30">
+                    <Star className="h-5 w-5 lg:h-6 lg:w-6 text-yellow-500 fill-yellow-500" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl lg:text-2xl xl:text-3xl flex items-center gap-3">
+                      Reviews
+                      {averageRating > 0 && (
+                        <span className="text-lg lg:text-xl font-normal text-muted-foreground">
+                          ({averageRating.toFixed(1)})
+                        </span>
+                      )}
+                    </CardTitle>
+                    {reviews.length > 0 && (
+                      <p className="text-sm lg:text-base text-muted-foreground mt-1">
+                        {reviews.length}{" "}
+                        {reviews.length === 1 ? "review" : "reviews"}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
+                  <Select
+                    value={reviewsSort}
+                    onValueChange={(v) => {
+                      const next = v as any as "recent" | "helpful" | "rating";
+                      setReviewsSort(next);
+                      setReviewsPage(1);
+                      loadReviews(1, next, true);
+                    }}
+                  >
+                    <SelectTrigger className="h-11 lg:h-12 w-full lg:w-[180px] text-sm lg:text-base border-2">
+                      <SelectValue placeholder="Sort" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="recent">Most recent</SelectItem>
+                      <SelectItem value="helpful">Most helpful</SelectItem>
+                      <SelectItem value="rating">Highest rated</SelectItem>
+                    </SelectContent>
+                  </Select>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    if (!user) {
-                      toast.error("Please login to write a review");
-                      router.push(`/login?redirect=/venue/${venueId}`);
-                      return;
-                    }
-                    if (!viewerCanReview) {
-                      toast.error(
-                        "Only users with a completed booking can write a review for this venue."
-                      );
-                      return;
-                    }
-                    if (viewerHasReviewed) {
-                      toast.error("You already reviewed this venue.");
-                      return;
-                    }
-                    setIsReviewDialogOpen(true);
-                  }}
-                  disabled={!user || !viewerCanReview || viewerHasReviewed}
-                  className="w-full sm:w-auto"
-                >
-                  {viewerHasReviewed ? "Reviewed" : "Write Review"}
-                </Button>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={() => {
+                      if (!user) {
+                        toast.error("Please login to write a review");
+                        router.push(`/login?redirect=/venue/${venueId}`);
+                        return;
+                      }
+                      if (!viewerCanReview) {
+                        toast.error(
+                          "Only users with a completed booking can write a review for this venue."
+                        );
+                        return;
+                      }
+                      if (viewerHasReviewed) {
+                        toast.error("You already reviewed this venue.");
+                        return;
+                      }
+                      setIsReviewDialogOpen(true);
+                    }}
+                    disabled={!user || !viewerCanReview || viewerHasReviewed}
+                    className="w-full lg:w-auto h-11 lg:h-12 text-sm lg:text-base font-semibold border-2 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+                  >
+                    {viewerHasReviewed ? "Reviewed" : "Write Review"}
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -643,31 +671,38 @@ export default function VenueDetailPage() {
               ) : null}
 
               {reviewsLoading && reviews.length === 0 ? (
-                <div className="py-8 text-center text-muted-foreground">
-                  <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin" />
-                  Loading reviews...
+                <div className="py-12 lg:py-16 text-center">
+                  <Loader2 className="mx-auto mb-4 h-8 w-8 lg:h-10 lg:w-10 animate-spin text-purple-600" />
+                  <p className="text-muted-foreground text-base lg:text-lg font-medium">
+                    Loading reviews...
+                  </p>
                 </div>
               ) : reviews.length === 0 ? (
-                <div className="text-center py-8">
-                  <Star className="h-12 w-12 mx-auto text-muted-foreground opacity-50 mb-4" />
-                  <p className="text-muted-foreground">
-                    No reviews yet. Be the first to review!
+                <div className="text-center py-12 lg:py-16">
+                  <div className="mx-auto w-20 h-20 lg:w-24 lg:h-24 rounded-full bg-gradient-to-br from-yellow-100 to-orange-100 dark:from-yellow-900/30 dark:to-orange-900/30 flex items-center justify-center mb-6">
+                    <Star className="h-10 w-10 lg:h-12 lg:w-12 text-yellow-500 opacity-60" />
+                  </div>
+                  <h3 className="text-lg lg:text-xl font-bold mb-2">
+                    No reviews yet
+                  </h3>
+                  <p className="text-muted-foreground text-base lg:text-lg">
+                    Be the first to review this venue!
                   </p>
                 </div>
               ) : (
-                <div className="space-y-6">
+                <div className="space-y-6 lg:space-y-8">
                   {reviews.map((review) => (
                     <div
                       key={review.id}
-                      className="border-b pb-6 last:border-0 last:pb-0"
+                      className="border-b border-gray-200 dark:border-gray-800 pb-6 lg:pb-8 last:border-0 last:pb-0 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 rounded-lg p-4 lg:p-6 transition-colors"
                     >
-                      <div className="flex items-start justify-between gap-3 mb-2">
-                        <div className="flex items-start gap-3 min-w-0">
+                      <div className="flex items-start justify-between gap-4 mb-3 lg:mb-4">
+                        <div className="flex items-start gap-4 min-w-0 flex-1">
                           {review.userPhoto ? (
                             <img
                               src={review.userPhoto}
                               alt={review.userName}
-                              className="h-10 w-10 rounded-full object-cover"
+                              className="h-12 w-12 lg:h-14 lg:w-14 rounded-full object-cover ring-2 ring-purple-200 dark:ring-purple-800 shrink-0"
                               loading="lazy"
                               decoding="async"
                               referrerPolicy="no-referrer"
@@ -678,61 +713,69 @@ export default function VenueDetailPage() {
                               }}
                             />
                           ) : (
-                            <div className="h-10 w-10 rounded-full bg-linear-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-semibold">
+                            <div className="h-12 w-12 lg:h-14 lg:w-14 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold text-lg lg:text-xl shrink-0 ring-2 ring-purple-200 dark:ring-purple-800">
                               {review.userName.charAt(0).toUpperCase()}
                             </div>
                           )}
-                          <div className="min-w-0">
-                            <div className="font-semibold truncate">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold text-base lg:text-lg truncate mb-1.5">
                               {review.userName}
                             </div>
-                            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-                              <div className="flex items-center">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm lg:text-base">
+                              <div className="flex items-center gap-0.5">
                                 {[...Array(5)].map((_, i) => (
                                   <Star
                                     key={i}
-                                    className={`h-3 w-3 ${
+                                    className={`h-4 w-4 lg:h-5 lg:w-5 ${
                                       i < review.rating
                                         ? "fill-yellow-400 text-yellow-400"
-                                        : "text-gray-300"
+                                        : "text-gray-300 dark:text-gray-600"
                                     }`}
                                   />
                                 ))}
                               </div>
-                              <span>•</span>
-                              <span>{formatReviewDate(review.createdAt)}</span>
+                              <span className="text-muted-foreground">•</span>
+                              <span className="text-muted-foreground font-medium">
+                                {formatReviewDate(review.createdAt)}
+                              </span>
                             </div>
                           </div>
                         </div>
                       </div>
-                      <p className="text-sm text-muted-foreground leading-relaxed mt-2">
+                      <p className="text-sm lg:text-base text-muted-foreground leading-relaxed mt-3 lg:mt-4 pl-0 lg:pl-0">
                         {review.comment}
                       </p>
                       {review.helpfulCount !== undefined &&
                         review.helpfulCount > 0 && (
-                          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-                            <ThumbsUp className="h-3 w-3" />
-                            <span>{review.helpfulCount} helpful</span>
+                          <div className="mt-4 lg:mt-5 flex items-center gap-2 text-xs lg:text-sm text-muted-foreground bg-yellow-50 dark:bg-yellow-900/20 w-fit px-3 py-1.5 rounded-full">
+                            <ThumbsUp className="h-3.5 w-3.5 lg:h-4 lg:w-4 text-yellow-600 dark:text-yellow-400" />
+                            <span className="font-medium">
+                              {review.helpfulCount}{" "}
+                              {review.helpfulCount === 1
+                                ? "person found this helpful"
+                                : "people found this helpful"}
+                            </span>
                           </div>
                         )}
                     </div>
                   ))}
 
                   {reviewsPage < reviewsTotalPages && (
-                    <div className="pt-2 flex justify-center">
+                    <div className="pt-4 lg:pt-6 flex justify-center">
                       <Button
                         variant="outline"
+                        size="lg"
                         disabled={reviewsLoading}
                         onClick={() => {
                           const next = reviewsPage + 1;
                           setReviewsPage(next);
                           loadReviews(next, reviewsSort, false);
                         }}
-                        className="w-full sm:w-auto"
+                        className="w-full sm:w-auto h-11 lg:h-12 text-sm lg:text-base font-semibold border-2 hover:bg-purple-50 dark:hover:bg-purple-900/20 min-w-[200px]"
                       >
                         {reviewsLoading ? (
                           <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            <Loader2 className="mr-2 h-4 w-4 lg:h-5 lg:w-5 animate-spin" />
                             Loading...
                           </>
                         ) : (
@@ -746,104 +789,143 @@ export default function VenueDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Events Section */}
-          <div className="mb-8">
-            <h2 className="mb-6 text-2xl font-bold">Upcoming Events</h2>
+          {/* Events Section - Enhanced for Large Screens */}
+          <div className="mb-8 lg:mb-12">
+            <div className="mb-6 lg:mb-8 flex items-center justify-between">
+              <h2 className="text-2xl lg:text-3xl xl:text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                Upcoming Events
+              </h2>
+              {events.length > 0 && (
+                <Badge
+                  variant="outline"
+                  className="text-sm lg:text-base px-4 py-1.5"
+                >
+                  {events.length} {events.length === 1 ? "Event" : "Events"}
+                </Badge>
+              )}
+            </div>
             {events.length === 0 ? (
-              <Card>
-                <CardContent className="p-12 text-center">
-                  <Calendar className="mx-auto h-12 w-12 text-muted-foreground opacity-50" />
-                  <h3 className="mt-4 text-lg font-semibold">
+              <Card className="shadow-lg border-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
+                <CardContent className="p-12 lg:p-16 text-center">
+                  <div className="mx-auto w-20 h-20 lg:w-24 lg:h-24 rounded-full bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 flex items-center justify-center mb-6">
+                    <Calendar className="h-10 w-10 lg:h-12 lg:w-12 text-purple-600 dark:text-purple-400 opacity-60" />
+                  </div>
+                  <h3 className="mt-4 text-xl lg:text-2xl font-bold">
                     No Upcoming Events
                   </h3>
-                  <p className="mt-2 text-muted-foreground">
+                  <p className="mt-2 text-muted-foreground text-base lg:text-lg">
                     This venue doesn't have any upcoming events at the moment.
                   </p>
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {events.map((event) => {
                   const isActive = isEventActive(event);
-                  // Capacity removed: treat availability as unlimited.
-                  const available = Number.POSITIVE_INFINITY;
                   const isSoldOut = false;
 
                   return (
                     <Card
                       key={event.id}
-                      className={`overflow-hidden transition-all hover:shadow-lg ${
+                      className={`group overflow-hidden transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 border-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm ${
                         !isActive || isSoldOut ? "opacity-60" : ""
                       }`}
                     >
                       {event.images && event.images.length > 0 ? (
-                        <div className="aspect-video w-full overflow-hidden bg-linear-to-br from-purple-500 to-pink-500">
+                        <div className="relative aspect-video w-full overflow-hidden bg-gradient-to-br from-purple-500 to-pink-500">
                           <img
                             src={event.images[0]}
                             alt={event.name}
-                            className="h-full w-full object-cover"
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                           />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
                       ) : (
-                        <div className="aspect-video w-full bg-linear-to-br from-purple-500 to-pink-500" />
+                        <div className="aspect-video w-full bg-gradient-to-br from-purple-500 via-pink-500 to-purple-600 flex items-center justify-center">
+                          <Music className="h-12 w-12 text-white/50" />
+                        </div>
                       )}
-                      <CardContent className="p-6">
-                        <div className="mb-2 flex items-start justify-between">
-                          <div className="flex-1">
-                            <h3 className="mb-1 text-lg font-bold">
+                      <CardContent className="p-5 lg:p-6">
+                        <div className="mb-3 flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="mb-2 text-lg lg:text-xl font-bold line-clamp-2 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                               {event.name}
                             </h3>
-                            <div className="mb-2 flex items-center gap-2">
-                              <Badge variant="secondary">{event.genre}</Badge>
+                            <div className="mb-3 flex flex-wrap items-center gap-2">
+                              <Badge
+                                variant="secondary"
+                                className="text-xs lg:text-sm"
+                              >
+                                {event.genre}
+                              </Badge>
                               {!isActive && (
                                 <Badge
                                   variant="outline"
-                                  className="text-orange-600"
+                                  className="text-orange-600 border-orange-300 text-xs lg:text-sm"
                                 >
                                   Past Event
                                 </Badge>
                               )}
                               {isSoldOut && (
-                                <Badge variant="destructive">Sold Out</Badge>
+                                <Badge
+                                  variant="destructive"
+                                  className="text-xs lg:text-sm"
+                                >
+                                  Sold Out
+                                </Badge>
                               )}
                             </div>
                           </div>
                         </div>
 
-                        <div className="mb-4 space-y-2 text-sm text-muted-foreground">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4" />
-                            <span>{formatDate(event.date)}</span>
+                        <div className="mb-4 space-y-2.5 text-sm lg:text-base">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Calendar className="h-4 w-4 lg:h-5 lg:w-5 text-purple-600 dark:text-purple-400 shrink-0" />
+                            <span className="font-medium">
+                              {formatDate(event.date)}
+                            </span>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4" />
-                            <span>{event.time}</span>
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Clock className="h-4 w-4 lg:h-5 lg:w-5 text-purple-600 dark:text-purple-400 shrink-0" />
+                            <span className="font-medium">{event.time}</span>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Users className="h-4 w-4" />
-                            <span>Unlimited booking available</span>
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Users className="h-4 w-4 lg:h-5 lg:w-5 text-purple-600 dark:text-purple-400 shrink-0" />
+                            <span className="font-medium">
+                              Unlimited booking
+                            </span>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <IndianRupee className="h-4 w-4" />
-                            <span className="font-semibold text-foreground">
-                              ₹{event.price} per person
+                          <div className="flex items-center gap-2 pt-1">
+                            <IndianRupee className="h-5 w-5 lg:h-6 lg:w-6 text-purple-600 dark:text-purple-400 shrink-0" />
+                            <span className="text-lg lg:text-xl font-bold text-purple-600 dark:text-purple-400">
+                              ₹{event.price}
+                            </span>
+                            <span className="text-sm text-muted-foreground">
+                              per person
                             </span>
                           </div>
                         </div>
 
                         {event.description && (
-                          <p className="mb-4 line-clamp-2 text-sm text-muted-foreground">
+                          <p className="mb-4 line-clamp-2 text-sm lg:text-base text-muted-foreground leading-relaxed">
                             {event.description}
                           </p>
                         )}
 
                         <Button
-                          className="w-full"
+                          className="w-full h-11 lg:h-12 text-base lg:text-lg font-semibold bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg hover:shadow-xl transition-all"
                           onClick={() => handleBookEvent(event)}
-                          disabled={!isActive || isSoldOut || !user}
+                          disabled={
+                            !isActive ||
+                            isSoldOut ||
+                            !user ||
+                            venue?.booking_paused
+                          }
                         >
                           {!user
                             ? "Login to Book"
+                            : venue?.booking_paused
+                            ? "Bookings Paused"
                             : isSoldOut
                             ? "Sold Out"
                             : !isActive
