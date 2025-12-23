@@ -46,16 +46,16 @@ export const metadata: Metadata = {
     googleBot: {
       index: true,
       follow: true,
-      maxSnippet: -1,
-      maxImagePreview: "large",
-      maxVideoPreview: -1,
+      "max-snippet": -1,
+      "max-image-preview": "large",
+      "max-video-preview": -1,
     },
   },
   // Once you generate a verification token in Google Search Console,
   // paste it here, e.g. verification: { google: "your-token" }
-  // verification: {
-  //   google: "YOUR_SEARCH_CONSOLE_VERIFICATION_TOKEN",
-  // },
+  verification: {
+    google: "MxI3E7skCjXf59bJJkNAR0cQvFNBxj6QEk75cld6KoU",
+  },
 };
 
 export default function RootLayout({
@@ -68,9 +68,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Providers>
-        {children}
-        </Providers>
+        <Providers>{children}</Providers>
         <ToastProvider />
       </body>
     </html>
