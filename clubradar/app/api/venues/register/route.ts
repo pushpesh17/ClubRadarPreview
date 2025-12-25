@@ -1,9 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { auth } from "@clerk/nextjs/server";
+import { secureAPIRequest, logSecurityEvent } from "@/lib/security/api-security";
+import { sanitizeString, isValidEmail, isValidPhone, isValidLength } from "@/lib/security/validation";
 
 export async function POST(request: NextRequest) {
   try {
+    // Apply security checks
+    const security = await secureAPIRequest(request, {
+      methods: ["POST"],
+      rateLimit: "standard",
+      maxSize: 10 * 1024 * 1024, // 10MB for venue registration (includes documents)
+      requireAuth: true,
+    });
+
+    if (security.error) {
+      logSecurityEvent("invalid_request", {
+        ip: security.clientIP,
+        path: request.nextUrl.pathname,
+        method: request.method,
+        reason: "Security check failed",
+      });
+      return security.error;
+    }
+
     // Get authenticated user from Clerk
     const { userId } = await auth();
     
@@ -14,7 +34,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    // Use sanitized body from security check
+    const body = security.sanitizedBody;
     const {
       name,
       description,
@@ -34,10 +55,52 @@ export async function POST(request: NextRequest) {
       documents, // Array of document URLs
     } = body;
 
-    // Validate required fields
-    if (!name || !address || !city || !phone || !email || !ownerName) {
+    // Validate and sanitize required fields
+    const sanitizedName = sanitizeString(name);
+    const sanitizedAddress = sanitizeString(address);
+    const sanitizedCity = sanitizeString(city);
+    const sanitizedPhone = sanitizeString(phone);
+    const sanitizedEmail = sanitizeString(email);
+    const sanitizedOwnerName = sanitizeString(ownerName);
+
+    if (!sanitizedName || !isValidLength(sanitizedName, 2, 200)) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: "Venue name must be between 2 and 200 characters" },
+        { status: 400 }
+      );
+    }
+
+    if (!sanitizedAddress || !isValidLength(sanitizedAddress, 5, 500)) {
+      return NextResponse.json(
+        { error: "Address must be between 5 and 500 characters" },
+        { status: 400 }
+      );
+    }
+
+    if (!sanitizedCity || !isValidLength(sanitizedCity, 2, 100)) {
+      return NextResponse.json(
+        { error: "City must be between 2 and 100 characters" },
+        { status: 400 }
+      );
+    }
+
+    if (!sanitizedPhone || !isValidPhone(sanitizedPhone)) {
+      return NextResponse.json(
+        { error: "Valid phone number is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!sanitizedEmail || !isValidEmail(sanitizedEmail)) {
+      return NextResponse.json(
+        { error: "Valid email address is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!sanitizedOwnerName || !isValidLength(sanitizedOwnerName, 2, 100)) {
+      return NextResponse.json(
+        { error: "Owner name must be between 2 and 100 characters" },
         { status: 400 }
       );
     }
@@ -130,9 +193,9 @@ export async function POST(request: NextRequest) {
           .from("users")
           .insert({
             id: userId, // Clerk user ID (TEXT type)
-            name: ownerName || null,
-            email: email || null,
-            phone: phone || null,
+            name: sanitizedOwnerName || null,
+            email: sanitizedEmail || null,
+            phone: sanitizedPhone || null,
             photo: null,
           })
           .select()
@@ -162,8 +225,8 @@ export async function POST(request: NextRequest) {
                 .from("users")
                 .insert({
                   id: userId,
-                  name: ownerName || null,
-                  email: email || null,
+                  name: sanitizedOwnerName || null,
+                  email: sanitizedEmail || null,
                   phone: null, // Don't set phone if it conflicts
                   photo: null,
                 })
@@ -318,28 +381,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create venue record with all KYC fields
+    // Sanitize optional fields
+    const sanitizedDescription = description ? sanitizeString(description) : null;
+    const sanitizedPincode = pincode ? sanitizeString(pincode) : null;
+    const sanitizedAlternatePhone = alternatePhone ? sanitizeString(alternatePhone) : null;
+    const sanitizedGstNumber = gstNumber ? sanitizeString(gstNumber) : null;
+    const sanitizedLicenseNumber = licenseNumber ? sanitizeString(licenseNumber) : null;
+    const sanitizedPanNumber = panNumber ? sanitizeString(panNumber) : null;
+    const sanitizedBankAccount = bankAccount ? sanitizeString(bankAccount) : null;
+    const sanitizedIfscCode = ifscCode ? sanitizeString(ifscCode) : null;
+
+    // Create venue record with all KYC fields (using sanitized values)
     const { data: venue, error: venueError } = await supabase
       .from("venues")
       .insert({
         user_id: userId,
-        name,
-        description: description || null,
-        address,
-        city,
-        pincode: pincode || null,
-        phone,
-        email,
+        name: sanitizedName,
+        description: sanitizedDescription,
+        address: sanitizedAddress,
+        city: sanitizedCity,
+        pincode: sanitizedPincode,
+        phone: sanitizedPhone,
+        email: sanitizedEmail,
         status: "pending", // Default status - needs admin approval
-        owner_name: ownerName,
-        alternate_phone: alternatePhone || null,
+        owner_name: sanitizedOwnerName,
+        alternate_phone: sanitizedAlternatePhone,
         capacity: capacity ? parseInt(capacity.toString()) : null,
-        gst_number: gstNumber || null,
-        license_number: licenseNumber || null,
-        pan_number: panNumber || null,
-        bank_account: bankAccount || null,
-        ifsc_code: ifscCode || null,
-        documents: documents || [], // Array of document URLs
+        gst_number: sanitizedGstNumber,
+        license_number: sanitizedLicenseNumber,
+        pan_number: sanitizedPanNumber,
+        bank_account: sanitizedBankAccount,
+        ifsc_code: sanitizedIfscCode,
+        documents: documents || [], // Array of document URLs (already validated by sanitizeInput)
       })
       .select()
       .single();

@@ -1,9 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { secureAPIRequest, logSecurityEvent } from "@/lib/security/api-security";
+import { sanitizeString, isValidLength } from "@/lib/security/validation";
 
 // GET /api/venues - Get approved venues (optionally filtered by city)
 export async function GET(request: NextRequest) {
   try {
+    // Apply security checks
+    const security = await secureAPIRequest(request, {
+      methods: ["GET"],
+      rateLimit: "standard",
+    });
+
+    if (security.error) {
+      return security.error;
+    }
+
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -37,10 +49,25 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Get query parameters
+    // Get query parameters and sanitize
     const { searchParams } = new URL(request.url);
-    const city = searchParams.get("city");
-    const search = searchParams.get("search");
+    const city = searchParams.get("city") ? sanitizeString(searchParams.get("city")!) : null;
+    const search = searchParams.get("search") ? sanitizeString(searchParams.get("search")!) : null;
+
+    // Validate input length
+    if (city && !isValidLength(city, 0, 100)) {
+      return NextResponse.json(
+        { error: "Invalid city parameter" },
+        { status: 400 }
+      );
+    }
+
+    if (search && !isValidLength(search, 0, 200)) {
+      return NextResponse.json(
+        { error: "Invalid search parameter" },
+        { status: 400 }
+      );
+    }
 
     // Build query - only get approved venues
     let query = supabase

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { generateQRCodeDataURL } from "@/lib/qrcode";
+import { secureAPIRequest, logSecurityEvent } from "@/lib/security/api-security";
+import { isValidUUID } from "@/lib/security/validation";
 
 async function fetchClerkUserProfile(userId: string) {
   const secretKey = process.env.CLERK_SECRET_KEY;
@@ -334,6 +336,24 @@ export async function GET(request: NextRequest) {
 // POST /api/bookings - Create new booking
 export async function POST(request: NextRequest) {
   try {
+    // Apply comprehensive security checks
+    const security = await secureAPIRequest(request, {
+      methods: ["POST"],
+      rateLimit: "booking",
+      maxSize: 50 * 1024, // 50KB for booking requests
+      requireAuth: true,
+    });
+
+    if (security.error) {
+      logSecurityEvent("invalid_request", {
+        ip: security.clientIP,
+        path: request.nextUrl.pathname,
+        method: request.method,
+        reason: "Security check failed",
+      });
+      return security.error;
+    }
+
     // Get authenticated user from Clerk
     const { userId } = await auth();
 
@@ -399,12 +419,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const bookingData = await request.json();
+    // Use sanitized body from security check
+    const bookingData = security.sanitizedBody;
     const { event_id, number_of_people } = bookingData;
 
-    if (!event_id || !number_of_people || number_of_people < 1) {
+    // Security: Input validation
+    if (!event_id || typeof event_id !== "string") {
       return NextResponse.json(
-        { error: "Event ID and number of people are required" },
+        { error: "Valid event ID is required" },
+        { status: 400 }
+      );
+    }
+
+    // Validate UUID format for event_id using validation utility
+    if (!isValidUUID(event_id)) {
+      logSecurityEvent("invalid_request", {
+        ip: security.clientIP,
+        path: request.nextUrl.pathname,
+        method: request.method,
+        reason: "Invalid UUID format",
+      });
+      return NextResponse.json(
+        { error: "Invalid event ID format" },
+        { status: 400 }
+      );
+    }
+
+    // Validate number of people
+    const numPeople = typeof number_of_people === "string" ? parseInt(number_of_people) : number_of_people;
+    if (!numPeople || numPeople < 1 || numPeople > 100 || !Number.isInteger(numPeople)) {
+      return NextResponse.json(
+        { error: "Number of people must be between 1 and 100" },
         { status: 400 }
       );
     }

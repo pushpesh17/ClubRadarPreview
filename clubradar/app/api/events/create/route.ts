@@ -1,8 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { secureAPIRequest, logSecurityEvent } from "@/lib/security/api-security";
+import { sanitizeString, isValidLength, isValidDate, isValidTime, isValidPrice } from "@/lib/security/validation";
 
 export async function POST(request: NextRequest) {
   try {
+    // Apply security checks
+    const security = await secureAPIRequest(request, {
+      methods: ["POST"],
+      rateLimit: "standard",
+      maxSize: 5 * 1024 * 1024, // 5MB for event creation (includes images)
+      requireAuth: true,
+    });
+
+    if (security.error) {
+      logSecurityEvent("invalid_request", {
+        ip: security.clientIP,
+        path: request.nextUrl.pathname,
+        method: request.method,
+        reason: "Security check failed",
+      });
+      return security.error;
+    }
+
     // Get authenticated user from Clerk
     const { userId } = await auth();
 
@@ -67,7 +87,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    // Use sanitized body from security check
+    const body = security.sanitizedBody;
     const {
       name,
       description,
@@ -82,20 +103,51 @@ export async function POST(request: NextRequest) {
       amenities,
     } = body;
 
-    // Validate required fields
-    if (
-      !name ||
-      !date ||
-      !time ||
-      !genre ||
-      price === undefined ||
-      price === null
-    ) {
+    // Security: Input validation and sanitization using utilities
+    const sanitizedName = sanitizeString(name);
+    if (!sanitizedName || !isValidLength(sanitizedName, 2, 200)) {
       return NextResponse.json(
-        {
-          error:
-            "Missing required fields: name, date, time, genre, and price are required",
-        },
+        { error: "Event name must be between 2 and 200 characters" },
+        { status: 400 }
+      );
+    }
+
+    if (!date || !isValidDate(date)) {
+      return NextResponse.json(
+        { error: "Valid date is required (YYYY-MM-DD format)" },
+        { status: 400 }
+      );
+    }
+
+    if (!time || !isValidTime(time)) {
+      return NextResponse.json(
+        { error: "Valid time is required (HH:MM format)" },
+        { status: 400 }
+      );
+    }
+
+    const sanitizedGenre = sanitizeString(genre);
+    if (!sanitizedGenre || !isValidLength(sanitizedGenre, 2, 50)) {
+      return NextResponse.json(
+        { error: "Genre must be between 2 and 50 characters" },
+        { status: 400 }
+      );
+    }
+
+    // Validate price
+    const priceNum = typeof price === "string" ? parseFloat(price) : price;
+    if (!isValidPrice(priceNum)) {
+      return NextResponse.json(
+        { error: "Valid price (non-negative number) is required" },
+        { status: 400 }
+      );
+    }
+
+    // Validate price decimal places
+    const decimalPlaces = (priceNum.toString().split(".")[1] || "").length;
+    if (decimalPlaces > 2) {
+      return NextResponse.json(
+        { error: "Price cannot have more than 2 decimal places" },
         { status: 400 }
       );
     }
@@ -109,37 +161,62 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate price
-    if (price < 0) {
-      return NextResponse.json(
-        { error: "Price cannot be negative" },
-        { status: 400 }
-      );
+    // Sanitize optional fields
+    const sanitizedDescription = description && typeof description === "string" 
+      ? description.substring(0, 2000).replace(/[<>]/g, "") 
+      : null;
+    
+    const sanitizedDressCode = dressCode && typeof dressCode === "string"
+      ? dressCode.substring(0, 100).replace(/[<>]/g, "")
+      : null;
+
+    // Validate images array
+    let sanitizedImages: string[] = [];
+    if (images && Array.isArray(images)) {
+      sanitizedImages = images
+        .filter((img: any) => typeof img === "string")
+        .map((img: string) => img.substring(0, 500))
+        .slice(0, 10); // Limit to 10 images
     }
 
-    // Create event
+    // Validate rules and amenities arrays
+    const sanitizedRules = rules && Array.isArray(rules)
+      ? rules
+          .filter((rule: any) => typeof rule === "string")
+          .map((rule: string) => rule.substring(0, 200).replace(/[<>]/g, ""))
+          .slice(0, 20)
+      : [];
+
+    const sanitizedAmenities = amenities && Array.isArray(amenities)
+      ? amenities
+          .filter((amenity: any) => typeof amenity === "string")
+          .map((amenity: string) => amenity.substring(0, 100).replace(/[<>]/g, ""))
+          .slice(0, 20)
+      : [];
+
+    // Create event (using sanitized values)
     const { data: event, error: eventError } = await supabase
       .from("events")
       .insert({
         venue_id: venue.id,
-        name,
-        description: description || null,
+        name: sanitizedName,
+        description: sanitizedDescription,
         date,
         time,
-        genre,
-        price: parseFloat(price),
+        genre: sanitizedGenre,
+        price: priceNum,
         // Capacity removed: treat as "unlimited". Keep a very high cap for compatibility with existing schema/UI.
-        capacity: capacity ? parseInt(capacity) : 1000000,
+        capacity: capacity ? parseInt(capacity.toString()) : 1000000,
         booked: 0,
-        dress_code: dressCode || null,
-        images: images || [],
+        dress_code: sanitizedDressCode,
+        images: sanitizedImages,
         location: {
           address: venue.address,
           city: venue.city,
           pincode: venue.pincode,
         },
-        rules: rules || [],
-        amenities: amenities || [],
+        rules: sanitizedRules,
+        amenities: sanitizedAmenities,
         contact: {
           phone: venue.phone || null,
           email: venue.email || null,
