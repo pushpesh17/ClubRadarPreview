@@ -24,6 +24,7 @@ import {
   Clock,
   AlertCircle,
   ArrowLeft,
+  Info,
 } from "lucide-react";
 import Link from "next/link";
 import { Navbar } from "@/components/navbar";
@@ -40,8 +41,19 @@ export default function VenueSignup() {
   const [uploadedDocuments, setUploadedDocuments] = useState<
     { name: string; url: string }[]
   >([]);
+  const [panGstDocuments, setPanGstDocuments] = useState<
+    { name: string; url: string }[]
+  >([]);
+  const [fssaiDocuments, setFssaiDocuments] = useState<
+    { name: string; url: string }[]
+  >([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadingDocumentType, setUploadingDocumentType] = useState<
+    "pan-gst" | "fssai" | "general" | null
+  >(null);
+  const [showPanGstTooltip, setShowPanGstTooltip] = useState(false);
+  const [showFssaiTooltip, setShowFssaiTooltip] = useState(false);
 
   // Venue status state
   const [venueStatus, setVenueStatus] = useState<{
@@ -80,8 +92,11 @@ export default function VenueSignup() {
     { id: 3, title: "KYC Documents", icon: FileText },
   ];
 
-  // Handle file upload
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle file upload for specific document types
+  const handleFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    documentType: "pan-gst" | "fssai" | "general" = "general"
+  ) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
@@ -93,11 +108,16 @@ export default function VenueSignup() {
     }
 
     setIsUploading(true);
+    setUploadingDocumentType(documentType);
     setUploadProgress(0);
 
     try {
       const formData = new FormData();
       Array.from(files).forEach((file) => {
+        // Validate file size (max 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+          throw new Error(`${file.name} exceeds 5MB limit`);
+        }
         formData.append("files", file);
       });
 
@@ -126,8 +146,16 @@ export default function VenueSignup() {
         throw new Error(data.error || "Failed to upload documents");
       }
 
-      // Add uploaded files to the list
-      setUploadedDocuments((prev) => [...prev, ...data.files]);
+      // Add uploaded files to the appropriate list
+      const uploadedFiles = data.files || [];
+      if (documentType === "pan-gst") {
+        setPanGstDocuments((prev) => [...prev, ...uploadedFiles]);
+      } else if (documentType === "fssai") {
+        setFssaiDocuments((prev) => [...prev, ...uploadedFiles]);
+      } else {
+        setUploadedDocuments((prev) => [...prev, ...uploadedFiles]);
+      }
+
       toast.success(data.message || "Documents uploaded successfully!");
 
       // Reset progress after a moment
@@ -144,6 +172,7 @@ export default function VenueSignup() {
       setUploadProgress(0);
     } finally {
       setIsUploading(false);
+      setUploadingDocumentType(null);
       // Reset file input
       e.target.value = "";
     }
@@ -173,9 +202,7 @@ export default function VenueSignup() {
     if (!formData.pincode?.trim()) {
       errors.push("Pincode is required");
     }
-    if (!formData.capacity || parseInt(formData.capacity) < 1) {
-      errors.push("Valid capacity is required");
-    }
+    // Capacity is optional - removed validation requirement
     if (!formData.ownerName?.trim()) {
       errors.push("Owner/Manager name is required");
     }
@@ -198,6 +225,13 @@ export default function VenueSignup() {
     }
     if (!formData.ifscCode?.trim()) {
       errors.push("IFSC code is required");
+    }
+    // Validate required documents
+    if (panGstDocuments.length === 0) {
+      errors.push("PAN & GST Registration documents are required");
+    }
+    if (fssaiDocuments.length === 0) {
+      errors.push("FSSAI License document is required");
     }
 
     if (errors.length > 0) {
@@ -260,7 +294,11 @@ export default function VenueSignup() {
           panNumber: formData.panNumber || null,
           bankAccount: formData.bankAccount || null,
           ifscCode: formData.ifscCode || null,
-          documents: uploadedDocuments.map((doc) => doc.url), // Include uploaded document URLs
+          documents: [
+            ...panGstDocuments.map((doc) => doc.url),
+            ...fssaiDocuments.map((doc) => doc.url),
+            ...uploadedDocuments.map((doc) => doc.url),
+          ], // Include all uploaded document URLs
         }),
       });
 
@@ -289,6 +327,24 @@ export default function VenueSignup() {
       setIsSubmitting(false);
     }
   };
+
+  // Close tooltips when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.tooltip-container')) {
+        setShowPanGstTooltip(false);
+        setShowFssaiTooltip(false);
+      }
+    };
+
+    if (showPanGstTooltip || showFssaiTooltip) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showPanGstTooltip, showFssaiTooltip]);
 
   // Check if user already has a venue
   useEffect(() => {
@@ -722,14 +778,14 @@ export default function VenueSignup() {
                     <div className="space-y-2">
                       <Label
                         htmlFor="venueName"
-                        className="text-sm sm:text-base"
+                        className="text-sm sm:text-base font-semibold"
                       >
-                        Venue Name *
+                        Venue Name <span className="text-red-500">*</span>
                       </Label>
                       <Input
                         id="venueName"
-                        placeholder="Enter your venue name"
-                        className="h-11 sm:h-12"
+                        placeholder="e.g., Club Radiance, The Night Owl"
+                        className="h-11 sm:h-12 text-sm sm:text-base"
                         value={formData.venueName}
                         onChange={(e) =>
                           setFormData({
@@ -743,14 +799,14 @@ export default function VenueSignup() {
                     <div className="space-y-2">
                       <Label
                         htmlFor="venueType"
-                        className="text-sm sm:text-base"
+                        className="text-sm sm:text-base font-semibold"
                       >
-                        Venue Type *
+                        Venue Type <span className="text-red-500">*</span>
                       </Label>
                       <Input
                         id="venueType"
-                        placeholder="Club, Bar, Lounge, etc."
-                        className="h-11 sm:h-12"
+                        placeholder="e.g., Nightclub, Bar, Lounge, Pub, Restaurant"
+                        className="h-11 sm:h-12 text-sm sm:text-base"
                         value={formData.venueType}
                         onChange={(e) =>
                           setFormData({
@@ -758,16 +814,17 @@ export default function VenueSignup() {
                             venueType: e.target.value,
                           })
                         }
+                        required
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="address" className="text-sm sm:text-base">
-                        Address *
+                      <Label htmlFor="address" className="text-sm sm:text-base font-semibold">
+                        Complete Address <span className="text-red-500">*</span>
                       </Label>
                       <Input
                         id="address"
-                        placeholder="Full address"
-                        className="h-11 sm:h-12"
+                        placeholder="Street address, building name, floor number"
+                        className="h-11 sm:h-12 text-sm sm:text-base"
                         value={formData.address}
                         onChange={(e) =>
                           setFormData({ ...formData, address: e.target.value })
@@ -777,13 +834,13 @@ export default function VenueSignup() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="city" className="text-sm sm:text-base">
-                          City *
+                        <Label htmlFor="city" className="text-sm sm:text-base font-semibold">
+                          City <span className="text-red-500">*</span>
                         </Label>
                         <Input
                           id="city"
-                          placeholder="City"
-                          className="h-11 sm:h-12"
+                          placeholder="e.g., Mumbai, Delhi, Bangalore"
+                          className="h-11 sm:h-12 text-sm sm:text-base"
                           value={formData.city}
                           onChange={(e) =>
                             setFormData({ ...formData, city: e.target.value })
@@ -794,42 +851,48 @@ export default function VenueSignup() {
                       <div className="space-y-2">
                         <Label
                           htmlFor="pincode"
-                          className="text-sm sm:text-base"
+                          className="text-sm sm:text-base font-semibold"
                         >
-                          Pincode *
+                          Pincode <span className="text-red-500">*</span>
                         </Label>
                         <Input
                           id="pincode"
-                          placeholder="Pincode"
-                          className="h-11 sm:h-12"
+                          placeholder="6-digit pincode"
+                          className="h-11 sm:h-12 text-sm sm:text-base"
                           value={formData.pincode}
                           onChange={(e) =>
                             setFormData({
                               ...formData,
-                              pincode: e.target.value,
+                              pincode: e.target.value.replace(/\D/g, "").slice(0, 6),
                             })
                           }
+                          maxLength={6}
+                          required
                         />
                       </div>
                     </div>
                     <div className="space-y-2">
                       <Label
                         htmlFor="capacity"
-                        className="text-sm sm:text-base"
+                        className="text-sm sm:text-base font-semibold"
                       >
-                        Capacity *
+                        Maximum Capacity <span className="text-red-500">*</span>
                       </Label>
                       <Input
                         id="capacity"
                         type="number"
-                        placeholder="Maximum capacity"
-                        className="h-11 sm:h-12"
+                        placeholder="e.g., 200, 500, 1000"
+                        className="h-11 sm:h-12 text-sm sm:text-base"
                         value={formData.capacity}
                         onChange={(e) =>
                           setFormData({ ...formData, capacity: e.target.value })
                         }
                         min="1"
+                        required
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Maximum number of people your venue can accommodate
+                      </p>
                     </div>
                     <Button
                       onClick={() => setCurrentStep(2)}
@@ -847,14 +910,14 @@ export default function VenueSignup() {
                     <div className="space-y-2">
                       <Label
                         htmlFor="ownerName"
-                        className="text-sm sm:text-base"
+                        className="text-sm sm:text-base font-semibold"
                       >
-                        Owner/Manager Name *
+                        Owner/Manager Name <span className="text-red-500">*</span>
                       </Label>
                       <Input
                         id="ownerName"
-                        placeholder="Full name"
-                        className="h-11 sm:h-12"
+                        placeholder="Full name as per PAN card"
+                        className="h-11 sm:h-12 text-sm sm:text-base"
                         value={formData.ownerName}
                         onChange={(e) =>
                           setFormData({
@@ -866,36 +929,42 @@ export default function VenueSignup() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="phone" className="text-sm sm:text-base">
-                        Phone Number *
+                      <Label htmlFor="phone" className="text-sm sm:text-base font-semibold">
+                        Phone Number <span className="text-red-500">*</span>
                       </Label>
                       <Input
                         id="phone"
                         type="tel"
                         placeholder="+91 9876543210"
-                        className="h-11 sm:h-12"
+                        className="h-11 sm:h-12 text-sm sm:text-base"
                         value={formData.phone}
                         onChange={(e) =>
                           setFormData({ ...formData, phone: e.target.value })
                         }
                         required
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Include country code (e.g., +91 for India)
+                      </p>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="email" className="text-sm sm:text-base">
-                        Email Address *
+                      <Label htmlFor="email" className="text-sm sm:text-base font-semibold">
+                        Email Address <span className="text-red-500">*</span>
                       </Label>
                       <Input
                         id="email"
                         type="email"
                         placeholder="venue@example.com"
-                        className="h-11 sm:h-12"
+                        className="h-11 sm:h-12 text-sm sm:text-base"
                         value={formData.email}
                         onChange={(e) =>
                           setFormData({ ...formData, email: e.target.value })
                         }
                         required
                       />
+                      <p className="text-xs text-muted-foreground">
+                        We'll send registration updates to this email
+                      </p>
                     </div>
                     <div className="space-y-2">
                       <Label
@@ -961,30 +1030,31 @@ export default function VenueSignup() {
                     className="space-y-4 sm:space-y-6 mt-4 sm:mt-6"
                   >
                     <div className="space-y-2">
-                      <Label htmlFor="gst" className="text-sm sm:text-base">
-                        GST Number (Optional)
+                      <Label htmlFor="gst" className="text-sm sm:text-base font-semibold">
+                        GST Number <span className="text-muted-foreground text-xs">(Optional)</span>
                       </Label>
                       <Input
                         id="gst"
-                        placeholder="GSTIN"
-                        className="h-11 sm:h-12"
+                        placeholder="15-digit GSTIN (e.g., 27AAAAA0000A1Z5)"
+                        className="h-11 sm:h-12 text-sm sm:text-base"
                         value={formData.gstNumber}
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            gstNumber: e.target.value,
+                            gstNumber: e.target.value.toUpperCase().replace(/\s/g, ""),
                           })
                         }
+                        maxLength={15}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="license" className="text-sm sm:text-base">
-                        License Number *
+                      <Label htmlFor="license" className="text-sm sm:text-base font-semibold">
+                        Business/Liquor License Number <span className="text-red-500">*</span>
                       </Label>
                       <Input
                         id="license"
-                        placeholder="Business/Liquor license number"
-                        className="h-11 sm:h-12"
+                        placeholder="Enter your business or liquor license number"
+                        className="h-11 sm:h-12 text-sm sm:text-base"
                         value={formData.licenseNumber}
                         onChange={(e) =>
                           setFormData({
@@ -992,172 +1062,551 @@ export default function VenueSignup() {
                             licenseNumber: e.target.value,
                           })
                         }
+                        required
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="pan" className="text-sm sm:text-base">
-                        PAN Number *
+                      <Label htmlFor="pan" className="text-sm sm:text-base font-semibold">
+                        PAN Number <span className="text-red-500">*</span>
                       </Label>
                       <Input
                         id="pan"
-                        placeholder="PAN card number"
-                        className="h-11 sm:h-12"
+                        placeholder="10-character PAN (e.g., ABCDE1234F)"
+                        className="h-11 sm:h-12 text-sm sm:text-base"
                         value={formData.panNumber}
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            panNumber: e.target.value,
+                            panNumber: e.target.value.toUpperCase().replace(/\s/g, "").slice(0, 10),
                           })
                         }
+                        maxLength={10}
+                        required
                       />
                     </div>
                     <div className="space-y-2">
                       <Label
                         htmlFor="bankAccount"
-                        className="text-sm sm:text-base"
+                        className="text-sm sm:text-base font-semibold"
                       >
-                        Bank Account Number *
+                        Bank Account Number <span className="text-red-500">*</span>
                       </Label>
                       <Input
                         id="bankAccount"
-                        placeholder="For payouts"
-                        className="h-11 sm:h-12"
+                        placeholder="Account number for payouts"
+                        className="h-11 sm:h-12 text-sm sm:text-base"
                         value={formData.bankAccount}
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            bankAccount: e.target.value,
+                            bankAccount: e.target.value.replace(/\D/g, ""),
                           })
                         }
+                        required
                       />
+                      <p className="text-xs text-muted-foreground">
+                        We'll use this account to process your earnings payouts
+                      </p>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="ifsc" className="text-sm sm:text-base">
-                        IFSC Code *
+                      <Label htmlFor="ifsc" className="text-sm sm:text-base font-semibold">
+                        IFSC Code <span className="text-red-500">*</span>
                       </Label>
                       <Input
                         id="ifsc"
-                        placeholder="IFSC code"
-                        className="h-11 sm:h-12"
+                        placeholder="11-character IFSC (e.g., HDFC0001234)"
+                        className="h-11 sm:h-12 text-sm sm:text-base"
                         value={formData.ifscCode}
                         onChange={(e) =>
-                          setFormData({ ...formData, ifscCode: e.target.value })
+                          setFormData({ 
+                            ...formData, 
+                            ifscCode: e.target.value.toUpperCase().replace(/\s/g, "").slice(0, 11)
+                          })
                         }
+                        maxLength={11}
+                        required
                       />
                     </div>
-                    <div className="rounded-lg border-2 border-dashed p-4 sm:p-6 text-center bg-muted/30">
-                      <Upload className="h-8 w-8 sm:h-10 sm:w-10 mx-auto mb-2 sm:mb-3 text-muted-foreground" />
-                      <p className="mb-1 sm:mb-2 text-sm sm:text-base font-medium">
-                        Upload Documents
-                      </p>
-                      <p className="mb-3 sm:mb-4 text-xs sm:text-sm text-muted-foreground px-2">
-                        Upload license, PAN card, and bank statement (PDF or
-                        Images, max 5MB each)
-                      </p>
-                      <input
-                        type="file"
-                        id="document-upload"
-                        multiple
-                        accept=".pdf,.jpg,.jpeg,.png,.webp"
-                        className="hidden"
-                        onChange={handleFileUpload}
-                        disabled={isUploading}
-                      />
-                      <Button
-                        variant="outline"
-                        className="h-10 sm:h-11 text-sm sm:text-base"
-                        onClick={() =>
-                          document.getElementById("document-upload")?.click()
-                        }
-                        disabled={isUploading}
-                      >
-                        {isUploading ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Uploading...
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="mr-2 h-4 w-4" />
-                            Choose Files
-                          </>
-                        )}
-                      </Button>
-                      {uploadProgress > 0 && uploadProgress < 100 && (
-                        <div className="mt-3">
-                          <div className="w-full bg-muted rounded-full h-2">
-                            <div
-                              className="bg-primary h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${uploadProgress}%` }}
-                            />
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {uploadProgress}% uploaded
-                          </p>
-                        </div>
-                      )}
-                      {uploadedDocuments.length > 0 && (
-                        <div className="mt-4 space-y-2">
-                          <p className="text-xs sm:text-sm font-medium text-muted-foreground">
-                            Uploaded Documents:
-                          </p>
-                          <div className="space-y-1">
-                            {uploadedDocuments.map((doc, index) => (
-                              <div
-                                key={index}
-                                className="flex items-center justify-between p-2 bg-background rounded border text-xs sm:text-sm"
+                    {/* Document Upload Section */}
+                    <div className="space-y-6 pt-2">
+                      <div className="border-t pt-6">
+                        <h3 className="text-base sm:text-lg md:text-xl font-semibold mb-3 sm:mb-4 text-foreground">
+                          Required Documents
+                        </h3>
+                        <p className="text-[10px] sm:text-xs md:text-sm text-muted-foreground mb-4 sm:mb-6 leading-relaxed">
+                          Please upload clear, legible copies. Format: PDF, JPG, PNG, or WEBP (max 5MB each).
+                        </p>
+
+                        {/* PAN & GST Registration Documents */}
+                        <div className="space-y-3 mb-6">
+                          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                            <Label className="text-xs sm:text-sm md:text-base font-semibold text-foreground leading-tight break-words">
+                              <span className="whitespace-normal">PAN & GST Registration Documents</span> <span className="text-red-500">*</span>
+                            </Label>
+                            {/* Mobile: Always show info, Desktop: Show on hover/click */}
+                            <div className="sm:hidden">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setShowPanGstTooltip(!showPanGstTooltip);
+                                }}
+                                className="focus:outline-none flex-shrink-0 touch-manipulation active:opacity-70"
+                                aria-label="Show information about PAN & GST documents"
                               >
-                                <span className="truncate flex-1">
-                                  {doc.name}
-                                </span>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0 ml-2"
-                                  onClick={() => {
-                                    setUploadedDocuments(
-                                      uploadedDocuments.filter(
-                                        (_, i) => i !== index
-                                      )
-                                    );
+                                <Info className="h-4 w-4 text-primary" />
+                              </button>
+                            </div>
+                            <div className="hidden sm:block relative tooltip-container">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setShowPanGstTooltip(!showPanGstTooltip);
+                                }}
+                                onMouseEnter={() => setShowPanGstTooltip(true)}
+                                onMouseLeave={() => setShowPanGstTooltip(false)}
+                                className="focus:outline-none flex-shrink-0"
+                                aria-label="Information about PAN & GST documents"
+                              >
+                                <Info className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground hover:text-primary cursor-help transition-colors" />
+                              </button>
+                              {/* Desktop: Show as tooltip */}
+                              {showPanGstTooltip && (
+                                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-[100] w-64 max-w-72">
+                                  <div className="bg-popover border rounded-lg shadow-xl p-3 text-xs text-popover-foreground relative">
+                                    <p className="font-semibold mb-2 text-xs">What to upload:</p>
+                                    <ul className="space-y-1.5 list-disc list-inside text-xs leading-relaxed">
+                                      <li>PAN Card (Permanent Account Number) - Front and back</li>
+                                      <li>GST Registration Certificate (GSTIN document)</li>
+                                      <li>Both documents should be clearly visible and valid</li>
+                                      <li>If PAN and GST are on the same document, upload once</li>
+                                    </ul>
+                                    <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-popover"></div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            {panGstDocuments.length > 0 && (
+                              <span className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                ✓ Uploaded
+                              </span>
+                            )}
+                          </div>
+                          {/* Mobile: Show as expandable section below label */}
+                          {showPanGstTooltip && (
+                            <div className="sm:hidden bg-muted/50 border rounded-lg p-2.5 text-[10px] text-popover-foreground">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1">
+                                  <p className="font-semibold mb-1.5 text-[11px]">What to upload:</p>
+                                  <ul className="space-y-1 list-disc list-inside leading-relaxed">
+                                    <li>PAN Card - Front & back</li>
+                                    <li>GST Certificate</li>
+                                    <li>Both must be clear & valid</li>
+                                  </ul>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setShowPanGstTooltip(false);
                                   }}
+                                  className="flex-shrink-0 text-muted-foreground active:opacity-70 touch-manipulation"
+                                  aria-label="Close"
                                 >
-                                  <X className="h-3 w-3" />
-                                </Button>
+                                  <X className="h-4 w-4" />
+                                </button>
                               </div>
-                            ))}
+                            </div>
+                          )}
+                          <div className="rounded-lg border-2 border-dashed p-4 sm:p-5 bg-muted/30 hover:bg-muted/50 transition-colors">
+                            <div className="space-y-3">
+                              <input
+                                type="file"
+                                id="pan-gst-upload"
+                                multiple
+                                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                                className="hidden"
+                                onChange={(e) => handleFileUpload(e, "pan-gst")}
+                                disabled={isUploading && uploadingDocumentType !== "pan-gst"}
+                              />
+                              <Button
+                                variant="outline"
+                                className="w-full sm:w-auto h-9 sm:h-10 md:h-11 text-[10px] sm:text-xs md:text-sm lg:text-base px-2 sm:px-4"
+                                onClick={() =>
+                                  document.getElementById("pan-gst-upload")?.click()
+                                }
+                                disabled={isUploading && uploadingDocumentType !== "pan-gst"}
+                              >
+                                {isUploading && uploadingDocumentType === "pan-gst" ? (
+                                  <>
+                                    <Loader2 className="mr-1 sm:mr-1.5 md:mr-2 h-3 w-3 sm:h-3.5 sm:w-3.5 md:h-4 md:w-4 animate-spin flex-shrink-0" />
+                                    <span className="text-[10px] sm:text-xs md:text-sm whitespace-nowrap">Uploading...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="mr-1 sm:mr-1.5 md:mr-2 h-3 w-3 sm:h-3.5 sm:w-3.5 md:h-4 md:w-4 flex-shrink-0" />
+                                    <span className="text-[10px] sm:text-xs md:text-sm lg:text-base break-words sm:whitespace-nowrap text-center leading-tight">
+                                      Upload PAN & GST Documents
+                                    </span>
+                                  </>
+                                )}
+                              </Button>
+                              {uploadProgress > 0 && uploadingDocumentType === "pan-gst" && (
+                                <div className="mt-3">
+                                  <div className="w-full bg-muted rounded-full h-2">
+                                    <div
+                                      className="bg-primary h-2 rounded-full transition-all duration-300"
+                                      style={{ width: `${uploadProgress}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                              {panGstDocuments.length > 0 && (
+                                <div className="mt-3 sm:mt-4 space-y-1.5 sm:space-y-2">
+                                  <p className="text-[10px] sm:text-xs md:text-sm font-medium text-muted-foreground">
+                                    Uploaded ({panGstDocuments.length}):
+                                  </p>
+                                  <div className="space-y-1 sm:space-y-1.5">
+                                    {panGstDocuments.map((doc, index) => (
+                                      <div
+                                        key={index}
+                                        className="flex items-center justify-between p-2 sm:p-2.5 bg-background rounded-lg border text-[10px] sm:text-xs md:text-sm"
+                                      >
+                                        <span className="truncate flex-1 font-medium text-[10px] sm:text-xs">
+                                          {doc.name}
+                                        </span>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 w-6 sm:h-7 sm:w-7 p-0 ml-1.5 sm:ml-2 hover:bg-destructive/10 hover:text-destructive flex-shrink-0"
+                                          onClick={() => {
+                                            setPanGstDocuments(
+                                              panGstDocuments.filter(
+                                                (_, i) => i !== index
+                                              )
+                                            );
+                                          }}
+                                        >
+                                          <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      )}
+
+                        {/* FSSAI License Document */}
+                        <div className="space-y-3 mb-6">
+                          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                            <Label className="text-xs sm:text-sm md:text-base font-semibold text-foreground leading-tight break-words">
+                              <span className="whitespace-normal">FSSAI License</span> <span className="text-red-500">*</span>
+                            </Label>
+                            {/* Mobile: Always show info, Desktop: Show on hover/click */}
+                            <div className="sm:hidden">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setShowFssaiTooltip(!showFssaiTooltip);
+                                }}
+                                className="focus:outline-none flex-shrink-0 touch-manipulation active:opacity-70"
+                                aria-label="Show information about FSSAI license"
+                              >
+                                <Info className="h-4 w-4 text-primary" />
+                              </button>
+                            </div>
+                            <div className="hidden sm:block relative tooltip-container">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setShowFssaiTooltip(!showFssaiTooltip);
+                                }}
+                                onMouseEnter={() => setShowFssaiTooltip(true)}
+                                onMouseLeave={() => setShowFssaiTooltip(false)}
+                                className="focus:outline-none flex-shrink-0"
+                                aria-label="Information about FSSAI license"
+                              >
+                                <Info className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground hover:text-primary cursor-help transition-colors" />
+                              </button>
+                              {/* Desktop: Show as tooltip */}
+                              {showFssaiTooltip && (
+                                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-[100] w-64 max-w-72">
+                                  <div className="bg-popover border rounded-lg shadow-xl p-3 text-xs text-popover-foreground relative">
+                                    <p className="font-semibold mb-2 text-xs">What to upload:</p>
+                                    <ul className="space-y-1.5 list-disc list-inside text-xs leading-relaxed">
+                                      <li>FSSAI Registration Certificate or License</li>
+                                      <li>Document should show FSSAI license number clearly</li>
+                                      <li>License must be valid and not expired</li>
+                                      <li>If you have FSSAI Registration (14-digit number), upload that certificate</li>
+                                      <li>If you have FSSAI License (17-digit number), upload the license document</li>
+                                    </ul>
+                                    <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-popover"></div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            {fssaiDocuments.length > 0 && (
+                              <span className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                ✓ Uploaded
+                              </span>
+                            )}
+                          </div>
+                          <div className="rounded-lg border-2 border-dashed p-4 sm:p-5 bg-muted/30 hover:bg-muted/50 transition-colors">
+                            <div className="space-y-3">
+                              <input
+                                type="file"
+                                id="fssai-upload"
+                                multiple
+                                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                                className="hidden"
+                                onChange={(e) => handleFileUpload(e, "fssai")}
+                                disabled={isUploading && uploadingDocumentType !== "fssai"}
+                              />
+                              <Button
+                                variant="outline"
+                                className="w-full sm:w-auto h-9 sm:h-10 md:h-11 text-[10px] sm:text-xs md:text-sm lg:text-base px-2 sm:px-4"
+                                onClick={() =>
+                                  document.getElementById("fssai-upload")?.click()
+                                }
+                                disabled={isUploading && uploadingDocumentType !== "fssai"}
+                              >
+                                {isUploading && uploadingDocumentType === "fssai" ? (
+                                  <>
+                                    <Loader2 className="mr-1 sm:mr-1.5 md:mr-2 h-3 w-3 sm:h-3.5 sm:w-3.5 md:h-4 md:w-4 animate-spin flex-shrink-0" />
+                                    <span className="text-[10px] sm:text-xs md:text-sm whitespace-nowrap">Uploading...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="mr-1 sm:mr-1.5 md:mr-2 h-3 w-3 sm:h-3.5 sm:w-3.5 md:h-4 md:w-4 flex-shrink-0" />
+                                    <span className="text-[10px] sm:text-xs md:text-sm lg:text-base break-words sm:whitespace-nowrap text-center">
+                                      Upload FSSAI License
+                                    </span>
+                                  </>
+                                )}
+                              </Button>
+                              {uploadProgress > 0 && uploadingDocumentType === "fssai" && (
+                                <div className="mt-3">
+                                  <div className="w-full bg-muted rounded-full h-2">
+                                    <div
+                                      className="bg-primary h-2 rounded-full transition-all duration-300"
+                                      style={{ width: `${uploadProgress}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                              {fssaiDocuments.length > 0 && (
+                                <div className="mt-3 sm:mt-4 space-y-1.5 sm:space-y-2">
+                                  <p className="text-[10px] sm:text-xs md:text-sm font-medium text-muted-foreground">
+                                    Uploaded ({fssaiDocuments.length}):
+                                  </p>
+                                  <div className="space-y-1 sm:space-y-1.5">
+                                    {fssaiDocuments.map((doc, index) => (
+                                      <div
+                                        key={index}
+                                        className="flex items-center justify-between p-2 sm:p-2.5 bg-background rounded-lg border text-[10px] sm:text-xs md:text-sm"
+                                      >
+                                        <span className="truncate flex-1 font-medium text-[10px] sm:text-xs">
+                                          {doc.name}
+                                        </span>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 w-6 sm:h-7 sm:w-7 p-0 ml-1.5 sm:ml-2 hover:bg-destructive/10 hover:text-destructive flex-shrink-0"
+                                          onClick={() => {
+                                            setFssaiDocuments(
+                                              fssaiDocuments.filter(
+                                                (_, i) => i !== index
+                                              )
+                                            );
+                                          }}
+                                        >
+                                          <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {/* Mobile: Show as expandable section below label */}
+                          {showFssaiTooltip && (
+                            <div className="sm:hidden bg-muted/50 border rounded-lg p-2.5 text-[10px] text-popover-foreground">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1">
+                                  <p className="font-semibold mb-1.5 text-[11px]">What to upload:</p>
+                                  <ul className="space-y-1 list-disc list-inside leading-relaxed">
+                                    <li>FSSAI Certificate or License</li>
+                                    <li>License number must be visible</li>
+                                    <li>Must be valid & not expired</li>
+                                  </ul>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setShowFssaiTooltip(false);
+                                  }}
+                                  className="flex-shrink-0 text-muted-foreground active:opacity-70 touch-manipulation"
+                                  aria-label="Close"
+                                >
+                                  <X className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Additional Documents (Optional) */}
+                        <div className="space-y-3">
+                          <Label className="text-xs sm:text-sm md:text-base font-semibold text-foreground">
+                            Additional Documents <span className="text-muted-foreground text-[10px] sm:text-xs">(Optional)</span>
+                          </Label>
+                          <div className="rounded-lg border-2 border-dashed p-3 sm:p-4 md:p-5 bg-muted/20">
+                            <p className="text-[10px] sm:text-xs md:text-sm text-muted-foreground mb-2 sm:mb-3">
+                              Upload any other relevant documents like business license, trade license, etc.
+                            </p>
+                            <input
+                              type="file"
+                              id="general-upload"
+                              multiple
+                              accept=".pdf,.jpg,.jpeg,.png,.webp"
+                              className="hidden"
+                              onChange={(e) => handleFileUpload(e, "general")}
+                              disabled={isUploading && uploadingDocumentType !== "general"}
+                            />
+                            <Button
+                              variant="outline"
+                              className="w-full sm:w-auto h-9 sm:h-10 md:h-11 text-[10px] sm:text-xs md:text-sm lg:text-base px-2 sm:px-4"
+                              onClick={() =>
+                                document.getElementById("general-upload")?.click()
+                              }
+                              disabled={isUploading && uploadingDocumentType !== "general"}
+                            >
+                              {isUploading && uploadingDocumentType === "general" ? (
+                                <>
+                                  <Loader2 className="mr-1 sm:mr-1.5 md:mr-2 h-3 w-3 sm:h-3.5 sm:w-3.5 md:h-4 md:w-4 animate-spin flex-shrink-0" />
+                                  <span className="text-[10px] sm:text-xs md:text-sm whitespace-nowrap">Uploading...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="mr-1 sm:mr-1.5 md:mr-2 h-3 w-3 sm:h-3.5 sm:w-3.5 md:h-4 md:w-4 flex-shrink-0" />
+                                  <span className="text-[10px] sm:text-xs md:text-sm lg:text-base break-words sm:whitespace-nowrap text-center leading-tight">
+                                    Upload Additional Documents
+                                  </span>
+                                </>
+                              )}
+                            </Button>
+                            {uploadedDocuments.length > 0 && (
+                              <div className="mt-3 sm:mt-4 space-y-1.5 sm:space-y-2">
+                                <p className="text-[10px] sm:text-xs md:text-sm font-medium text-muted-foreground">
+                                  Uploaded ({uploadedDocuments.length}):
+                                </p>
+                                <div className="space-y-1 sm:space-y-1.5">
+                                  {uploadedDocuments.map((doc, index) => (
+                                    <div
+                                      key={index}
+                                      className="flex items-center justify-between p-2 sm:p-2.5 bg-background rounded-lg border text-[10px] sm:text-xs md:text-sm"
+                                    >
+                                      <span className="truncate flex-1 font-medium text-[10px] sm:text-xs">
+                                        {doc.name}
+                                      </span>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 sm:h-7 sm:w-7 p-0 ml-1.5 sm:ml-2 hover:bg-destructive/10 hover:text-destructive flex-shrink-0"
+                                        onClick={() => {
+                                          setUploadedDocuments(
+                                            uploadedDocuments.filter(
+                                              (_, i) => i !== index
+                                            )
+                                          );
+                                        }}
+                                      >
+                                        <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-2">
+                    {/* Document Upload Summary */}
+                    {(panGstDocuments.length > 0 || fssaiDocuments.length > 0) && (
+                      <div className="rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 p-4">
+                        <div className="flex items-start gap-2">
+                          <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-green-900 dark:text-green-200 mb-2">
+                              Documents Uploaded
+                            </p>
+                            <div className="space-y-1 text-xs sm:text-sm text-green-800 dark:text-green-300">
+                              {panGstDocuments.length > 0 && (
+                                <p>✓ PAN & GST Documents: {panGstDocuments.length} file(s)</p>
+                              )}
+                              {fssaiDocuments.length > 0 && (
+                                <p>✓ FSSAI License: {fssaiDocuments.length} file(s)</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-4 border-t">
                       <Button
                         variant="outline"
                         onClick={() => setCurrentStep(2)}
                         className="flex-1 h-11 sm:h-12 text-sm sm:text-base font-semibold"
                       >
+                        <ArrowLeft className="mr-2 h-4 w-4" />
                         Back
                       </Button>
                       <Button
-                        className="flex-1 h-11 sm:h-12 text-sm sm:text-base font-semibold bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                        className="flex-1 h-11 sm:h-12 text-sm sm:text-base font-semibold bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg hover:shadow-xl transition-all"
                         onClick={handleSubmit}
                         disabled={isSubmitting || authLoading || !user}
                       >
                         {isSubmitting ? (
                           <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Submitting...
+                            Submitting Registration...
                           </>
                         ) : (
-                          "Submit Registration"
+                          <>
+                            Submit Registration
+                            <ArrowRight className="ml-2 h-4 w-4" />
+                          </>
                         )}
                       </Button>
                     </div>
-                    <p className="text-center text-xs sm:text-sm text-muted-foreground px-2">
-                      By submitting, you agree to our Terms of Service and
-                      Privacy Policy. Your application will be reviewed within
-                      24-48 hours.
-                    </p>
+                    <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 p-4 mt-4">
+                      <p className="text-xs sm:text-sm text-blue-900 dark:text-blue-200 leading-relaxed">
+                        <strong className="font-semibold">Important:</strong> By submitting, you agree to our{" "}
+                        <Link href="/terms" className="underline hover:text-blue-700 dark:hover:text-blue-300">
+                          Terms of Service
+                        </Link>{" "}
+                        and{" "}
+                        <Link href="/privacy" className="underline hover:text-blue-700 dark:hover:text-blue-300">
+                          Privacy Policy
+                        </Link>
+                        . Your application will be reviewed within 24-48 hours. You'll receive an email notification once your venue is approved.
+                      </p>
+                    </div>
                   </TabsContent>
                 </Tabs>
               </CardContent>
