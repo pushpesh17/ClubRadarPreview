@@ -10,12 +10,9 @@ export async function POST(request: NextRequest) {
   try {
     // Get authenticated user from Clerk
     const { userId } = await auth();
-    
+
     if (!userId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await request.json();
@@ -25,7 +22,7 @@ export async function POST(request: NextRequest) {
     // This is needed because RLS policies don't work with Clerk auth
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    
+
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error("Missing Supabase configuration");
       return NextResponse.json(
@@ -35,7 +32,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Create Supabase client with service role key (bypasses RLS)
-    const { createClient: createServiceClient } = await import("@supabase/supabase-js");
+    const { createClient: createServiceClient } = await import(
+      "@supabase/supabase-js"
+    );
     const supabase = createServiceClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
@@ -103,7 +102,7 @@ export async function POST(request: NextRequest) {
         console.error("Error creating user:", createError);
         console.error("User ID:", userId);
         console.error("User data:", { name, email, phone, photo });
-        
+
         // If it's a duplicate key error, user might have been created between check and insert
         if (createError.code === "23505") {
           // Duplicate key - user was created by another request, return success
@@ -112,7 +111,7 @@ export async function POST(request: NextRequest) {
             .select("*")
             .eq("id", userId)
             .maybeSingle();
-          
+
           if (existingUserAfter) {
             return NextResponse.json(
               { success: true, user: existingUserAfter, action: "created" },
@@ -120,16 +119,54 @@ export async function POST(request: NextRequest) {
             );
           }
         }
-        
+
         return NextResponse.json(
-          { 
-            error: "Failed to create user", 
+          {
+            error: "Failed to create user",
             details: createError.message,
             code: createError.code,
-            hint: createError.hint
+            hint: createError.hint,
           },
           { status: 500 }
         );
+      }
+
+      // After creating new user, check if there's old data to migrate
+      if (email) {
+        try {
+          // Call the migration function to migrate data from old user_id to new user_id
+          const { data: migrationResult, error: migrationError } =
+            await supabase.rpc("migrate_user_data_by_email", {
+              new_user_id: userId,
+              user_email: email,
+            });
+
+          if (
+            !migrationError &&
+            migrationResult &&
+            migrationResult.length > 0
+          ) {
+            const migration = migrationResult[0];
+            if (
+              migration.migrated_venues > 0 ||
+              migration.migrated_bookings > 0 ||
+              migration.migrated_reviews > 0
+            ) {
+              console.log(`Auto-migrated data for user ${email}:`, {
+                venues: migration.migrated_venues,
+                bookings: migration.migrated_bookings,
+                reviews: migration.migrated_reviews,
+                old_user_id: migration.old_user_id,
+              });
+            }
+          } else if (migrationError) {
+            // Log error but don't fail the user creation
+            console.error("Migration error (non-fatal):", migrationError);
+          }
+        } catch (migrationErr) {
+          // Log error but don't fail the user creation
+          console.error("Migration exception (non-fatal):", migrationErr);
+        }
       }
 
       return NextResponse.json(
@@ -145,4 +182,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
