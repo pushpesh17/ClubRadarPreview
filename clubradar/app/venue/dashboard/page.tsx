@@ -2548,90 +2548,99 @@ export default function VenueDashboard() {
                         {bookings.map((booking) => (
                           <div
                             key={booking.id}
-                            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 rounded-lg border-2 p-3 sm:p-4 hover:shadow-md transition-shadow bg-card"
+                            className="flex flex-col gap-3 rounded-lg border-2 p-3 sm:p-4 hover:shadow-md transition-shadow bg-card overflow-hidden w-full"
                           >
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-start gap-3">
-                                <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900 flex-shrink-0">
-                                  <Users className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600 dark:text-purple-400" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <h3 className="font-semibold text-sm sm:text-base">
-                                    {booking.name}
-                                  </h3>
-                                  <p className="text-xs sm:text-sm text-muted-foreground truncate">
-                                    {booking.phone}
-                                  </p>
-                                  <p className="text-xs sm:text-sm font-medium mt-1 truncate">
-                                    {booking.event}
-                                  </p>
-                                  <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                                    {new Date(booking.date).toLocaleDateString(
-                                      "en-IN",
-                                      {
-                                        day: "numeric",
-                                        month: "short",
-                                        year: "numeric",
-                                      }
-                                    )}{" "}
-                                    at {booking.time || "TBD"}
-                                  </p>
-                                  <div className="flex flex-wrap items-center gap-2 mt-2">
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs"
-                                    >
-                                      {booking.numberOfPeople}{" "}
-                                      {booking.numberOfPeople === 1
-                                        ? "person"
-                                        : "people"}
-                                    </Badge>
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs"
-                                    >
-                                      ₹{booking.totalPrice}
-                                    </Badge>
-                                    {booking.qrCode && (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-xs"
-                                      >
-                                        <QrCode className="h-3 w-3 mr-1" />
-                                        {booking.id.substring(0, 8)}
-                                      </Badge>
-                                    )}
-                                  </div>
-                                </div>
+                            {/* Customer Info Section */}
+                            <div className="flex items-start gap-2.5 sm:gap-3 w-full">
+                              <div className="flex h-9 w-9 sm:h-12 sm:w-12 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900 flex-shrink-0">
+                                <Users className="h-4 w-4 sm:h-6 sm:w-6 text-purple-600 dark:text-purple-400" />
+                              </div>
+                              <div className="flex-1 min-w-0 overflow-hidden">
+                                <h3 className="font-semibold text-sm sm:text-base truncate leading-tight">
+                                  {booking.name}
+                                </h3>
+                                <p className="text-xs sm:text-sm text-muted-foreground truncate mt-0.5">
+                                  {booking.phone}
+                                </p>
                               </div>
                             </div>
-                            <div className="flex flex-row sm:flex-col gap-2 sm:flex-shrink-0">
+
+                            {/* Event Details Section */}
+                            <div className="w-full space-y-1.5">
+                              <p className="text-xs sm:text-sm font-medium truncate">
+                                {booking.event}
+                              </p>
+                              <p className="text-xs sm:text-sm text-muted-foreground leading-tight">
+                                {new Date(booking.date).toLocaleDateString(
+                                  "en-IN",
+                                  {
+                                    day: "numeric",
+                                    month: "short",
+                                    year: "numeric",
+                                  }
+                                )}{" "}
+                                at {booking.time || "TBD"}
+                              </p>
+                            </div>
+
+                            {/* Booking Summary Pills */}
+                            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full">
                               <Badge
-                                variant={
-                                  booking.status === "confirmed"
-                                    ? "default"
-                                    : booking.status === "cancelled"
-                                    ? "destructive"
-                                    : "secondary"
-                                }
-                                className="text-xs w-fit"
+                                variant="outline"
+                                className="text-[10px] sm:text-xs shrink-0 px-1.5 sm:px-2 py-0.5"
                               >
-                                {booking.status}
+                                {booking.numberOfPeople}{" "}
+                                {booking.numberOfPeople === 1
+                                  ? "person"
+                                  : "people"}
                               </Badge>
                               <Badge
-                                variant={
-                                  booking.paymentStatus === "completed"
-                                    ? "default"
-                                    : "outline"
-                                }
-                                className="text-xs w-fit"
+                                variant="outline"
+                                className="text-[10px] sm:text-xs shrink-0 px-1.5 sm:px-2 py-0.5"
                               >
-                                {booking.paymentStatus}
+                                ₹{booking.totalPrice}
                               </Badge>
+                              {booking.qrCode && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] sm:text-xs shrink-0 px-1.5 sm:px-2 py-0.5"
+                                >
+                                  <QrCode className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1 inline" />
+                                  {booking.id.substring(0, 8)}
+                                </Badge>
+                              )}
+                            </div>
+
+                            {/* Status and Action Buttons */}
+                            <div className="flex flex-col gap-2 w-full pt-1 border-t">
+                              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                <Badge
+                                  variant={
+                                    booking.status === "confirmed"
+                                      ? "default"
+                                      : booking.status === "cancelled"
+                                      ? "destructive"
+                                      : "secondary"
+                                  }
+                                  className="text-[10px] sm:text-xs shrink-0 px-2 py-0.5"
+                                >
+                                  {booking.status}
+                                </Badge>
+                                <Badge
+                                  variant={
+                                    booking.paymentStatus === "completed"
+                                      ? "default"
+                                      : "outline"
+                                  }
+                                  className="text-[10px] sm:text-xs shrink-0 px-2 py-0.5"
+                                >
+                                  {booking.paymentStatus}
+                                </Badge>
+                              </div>
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="text-xs sm:text-sm flex-1 sm:flex-initial"
+                                className="text-xs sm:text-sm w-full h-8 sm:h-9 whitespace-nowrap"
                                 onClick={() => {
                                   setSelectedBooking(booking);
                                   setIsBookingViewDialogOpen(true);
