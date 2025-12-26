@@ -135,7 +135,7 @@ export default function DiscoverPage() {
       
       // Get trending/promoted venues (top 5 venues with active events)
       const trending = sortedVenues
-        .filter((v) => v.activeEventsCount > 0)
+        .filter((v: Venue) => v.activeEventsCount > 0)
         .slice(0, 5);
       setTrendingVenues(trending);
       setCurrentSlide(0); // Reset to first slide when venues change
