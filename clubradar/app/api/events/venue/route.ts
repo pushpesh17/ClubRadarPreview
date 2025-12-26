@@ -71,6 +71,51 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Get actual booking counts and revenue from bookings table for accuracy
+    const eventIds = (events || []).map((e: any) => e.id);
+    
+    if (eventIds.length > 0) {
+      // Get booking counts per event (only completed bookings)
+      const { data: bookings, error: bookingsError } = await supabase
+        .from("bookings")
+        .select("event_id, number_of_people, total_amount, payment_status")
+        .in("event_id", eventIds)
+        .eq("payment_status", "completed");
+
+      if (bookingsError) {
+        console.error("Error fetching bookings for events:", bookingsError);
+        // Continue with events even if booking fetch fails
+      }
+
+      // Calculate actual booking counts and revenue per event
+      const bookingStats: Record<string, { booked: number; revenue: number }> = {};
+      
+      (bookings || []).forEach((booking: any) => {
+        const eventId = booking.event_id;
+        if (!bookingStats[eventId]) {
+          bookingStats[eventId] = { booked: 0, revenue: 0 };
+        }
+        bookingStats[eventId].booked += booking.number_of_people || 0;
+        bookingStats[eventId].revenue += parseFloat(booking.total_amount || 0);
+      });
+
+      // Add actual booking counts and revenue to events
+      const eventsWithStats = (events || []).map((event: any) => ({
+        ...event,
+        booked: bookingStats[event.id]?.booked || 0,
+        actualRevenue: bookingStats[event.id]?.revenue || 0,
+      }));
+
+      return NextResponse.json(
+        {
+          success: true,
+          events: eventsWithStats || [],
+          count: eventsWithStats?.length || 0,
+        },
+        { status: 200 }
+      );
+    }
+
     return NextResponse.json(
       {
         success: true,

@@ -324,6 +324,7 @@ export default function VenueDashboard() {
       }
 
       // Transform Supabase events to match our Event interface
+      // Use actual booking counts from API (calculated from bookings table)
       const transformedEvents: Event[] = (data.events || []).map(
         (event: any) => ({
           id: event.id,
@@ -333,7 +334,7 @@ export default function VenueDashboard() {
           genre: event.genre,
           capacity: event.capacity,
           price: parseFloat(event.price),
-          booked: event.booked || 0,
+          booked: event.booked || 0, // Actual booking count from API
           bookings: event.booked || 0,
           description: event.description,
           dressCode: event.dress_code,
@@ -559,20 +560,57 @@ export default function VenueDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
-  // Calculate stats from actual events
+  // Auto-refresh data every 30 seconds when on overview or bookings tab
+  useEffect(() => {
+    if (!isApproved || !venue) return;
+    if (activeTab !== "overview" && activeTab !== "bookings" && activeTab !== "earnings") return;
+
+    const refreshInterval = setInterval(() => {
+      // Refresh bookings (needed for stats calculation)
+      if (activeTab === "overview" || activeTab === "bookings") {
+        loadBookings(1, bookingsSearch, bookingsStatusFilter);
+      }
+      // Refresh earnings
+      if (activeTab === "overview" || activeTab === "earnings") {
+        loadEarnings();
+      }
+      // Refresh events (needed for stats)
+      if (activeTab === "overview") {
+        loadEvents();
+      }
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(refreshInterval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, isApproved, venue, bookingsSearch, bookingsStatusFilter]);
+
+  // Calculate stats from actual data sources
+  // Use earnings API for revenue (most accurate - sums all completed bookings)
+  // Use events API for booking counts (now includes actual counts from bookings table)
+  // Use bookings array for today's bookings (filtered from loaded bookings)
   const stats = {
+    // Total bookings: sum of all booked people from events (calculated from actual bookings)
     totalBookings: events.reduce((sum, event) => sum + (event.booked || 0), 0),
-    todayBookings: events
-      .filter((event) => {
-        const eventDate = new Date(event.date);
+    
+    // Today's bookings: count bookings for events happening today (from bookings array)
+    todayBookings: bookings
+      .filter((b: any) => {
+        if (b.paymentStatus !== "completed" && b.status !== "confirmed") return false;
+        const eventDate = new Date(b.date);
         const today = new Date();
         return eventDate.toDateString() === today.toDateString();
       })
-      .reduce((sum, event) => sum + (event.booked || 0), 0),
-    revenue: events.reduce(
-      (sum, event) => sum + (event.booked || 0) * event.price,
-      0
-    ),
+      .reduce((sum: number, b: any) => sum + (b.numberOfPeople || 1), 0),
+    
+    // Revenue: use earnings API data (most accurate - sums all completed booking amounts)
+    // Fallback to calculating from bookings if earnings not loaded yet
+    revenue: earnings.totalEarnings > 0 
+      ? earnings.totalEarnings 
+      : bookings
+          .filter((b: any) => b.paymentStatus === "completed" || b.status === "confirmed")
+          .reduce((sum: number, b: any) => sum + parseFloat(b.totalPrice || 0), 0),
+    
+    // Upcoming events: count events in next 7 days
     upcomingEvents: events.filter((event) => {
       const eventDate = new Date(event.date);
       const today = new Date();
