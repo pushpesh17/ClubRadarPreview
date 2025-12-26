@@ -4,6 +4,8 @@ import "./globals.css";
 import { ToastProvider } from "@/components/toast-provider";
 import { Providers } from "@/components/providers";
 import { SecurityProvider } from "@/components/security-provider";
+import { OccasionDecorations } from "@/components/occasion-decorations";
+import { currentOccasion, decorationsEnabled } from "@/lib/occasion-config";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -91,7 +93,15 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <SecurityProvider>
-          <Providers>{children}</Providers>
+          <Providers>
+            {children}
+            {currentOccasion !== "none" && (
+              <OccasionDecorations
+                occasion={currentOccasion}
+                enabled={decorationsEnabled}
+              />
+            )}
+          </Providers>
           <ToastProvider />
         </SecurityProvider>
       </body>
