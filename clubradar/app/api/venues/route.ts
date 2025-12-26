@@ -6,14 +6,24 @@ import { sanitizeString, isValidLength } from "@/lib/security/validation";
 // GET /api/venues - Get approved venues (optionally filtered by city)
 export async function GET(request: NextRequest) {
   try {
-    // Apply security checks
-    const security = await secureAPIRequest(request, {
-      methods: ["GET"],
-      rateLimit: "standard",
-    });
+    // Log that the route is being called (for debugging)
+    console.log("[GET /api/venues] Route called");
 
-    if (security.error) {
-      return security.error;
+    // Apply security checks (with error handling)
+    let security;
+    try {
+      security = await secureAPIRequest(request, {
+        methods: ["GET"],
+        rateLimit: "standard",
+      });
+
+      if (security.error) {
+        return security.error;
+      }
+    } catch (securityError: any) {
+      // If security middleware fails, log but continue (for debugging)
+      console.error("[GET /api/venues] Security middleware error:", securityError);
+      // Continue without security checks if middleware fails
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

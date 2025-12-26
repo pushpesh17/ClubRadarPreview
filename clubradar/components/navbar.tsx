@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
   NavigationMenu,
@@ -60,7 +61,18 @@ export function Navbar() {
 
       <div className="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8 w-full">
         {/* Logo */}
-        <Link href="/" className="flex items-center space-x-2 group">
+        <Link
+          href="/"
+          className="flex items-center space-x-2 sm:space-x-3 group"
+        >
+          <Image
+            src="/android-chrome-192x192.png"
+            alt="ClubRadar Logo"
+            width={40}
+            height={40}
+            className="h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 object-contain flex-shrink-0 transition-transform duration-300 group-hover:scale-110"
+            priority
+          />
           <div className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-purple-600 bg-clip-text text-transparent tracking-tight group-hover:from-purple-700 group-hover:via-pink-700 group-hover:to-purple-700 transition-all duration-300">
             ClubRadar
           </div>
@@ -169,9 +181,18 @@ export function Navbar() {
           </SheetTrigger>
           <SheetContent side="right" className="w-[300px] sm:w-[400px]">
             <SheetHeader className="pb-4 border-b">
-              <SheetTitle className="text-xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                Menu
-              </SheetTitle>
+              <div className="flex items-center gap-2">
+                <Image
+                  src="/android-chrome-192x192.png"
+                  alt="ClubRadar Logo"
+                  width={28}
+                  height={28}
+                  className="h-7 w-7 object-contain flex-shrink-0"
+                />
+                <SheetTitle className="text-xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  Menu
+                </SheetTitle>
+              </div>
             </SheetHeader>
             <div className="flex flex-col space-y-1 mt-6">
               <Link

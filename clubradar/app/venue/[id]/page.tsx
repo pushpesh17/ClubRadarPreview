@@ -230,15 +230,21 @@ export default function VenueDetailPage() {
 
     setIsBookingLoading(true);
     try {
+      // SECURITY: Add honeypot field (hidden from users, bots will fill it)
+      // SECURITY: Never send price from client - server calculates it
       const response = await fetch("/api/bookings", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "X-Requested-With": "XMLHttpRequest", // CSRF protection
         },
         credentials: "include",
         body: JSON.stringify({
           event_id: selectedEvent.id,
           number_of_people: numberOfPeople,
+          // Honeypot fields (hidden, bots will fill these)
+          _honeypot: "", // Should always be empty
+          // DO NOT send price - server calculates it from event.price
         }),
       });
 

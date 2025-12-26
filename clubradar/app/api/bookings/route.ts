@@ -462,7 +462,57 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (eventError || !event) {
+      logSecurityEvent("invalid_request", {
+        ip: security.clientIP,
+        path: request.nextUrl.pathname,
+        method: request.method,
+        reason: "Event not found",
+      });
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+
+    // SECURITY: Validate price from server (prevent price manipulation)
+    const serverPrice = parseFloat(event.price.toString());
+    if (isNaN(serverPrice) || serverPrice < 0) {
+      logSecurityEvent("malicious_input", {
+        ip: security.clientIP,
+        path: request.nextUrl.pathname,
+        method: request.method,
+        reason: "Invalid event price",
+      });
+      return NextResponse.json(
+        { error: "Invalid event pricing" },
+        { status: 400 }
+      );
+    }
+
+    // SECURITY: Check if client sent a price (they shouldn't - we calculate it)
+    if (bookingData.price !== undefined) {
+      logSecurityEvent("malicious_input", {
+        ip: security.clientIP,
+        path: request.nextUrl.pathname,
+        method: request.method,
+        reason: "Client attempted to send price (price manipulation attempt)",
+      });
+      return NextResponse.json(
+        { error: "Price cannot be modified by client" },
+        { status: 400 }
+      );
+    }
+
+    // SECURITY: Validate honeypot field (if present, it's a bot)
+    if (bookingData._honeypot || bookingData.website || bookingData.url) {
+      logSecurityEvent("malicious_input", {
+        ip: security.clientIP,
+        path: request.nextUrl.pathname,
+        method: request.method,
+        reason: "Honeypot field detected (bot/spam)",
+      });
+      // Silently reject (don't reveal it's a honeypot)
+      return NextResponse.json(
+        { error: "Invalid request" },
+        { status: 400 }
+      );
     }
 
     // Fetch venue details for email
@@ -589,10 +639,26 @@ export async function POST(request: NextRequest) {
     // Generate QR code with booking ID
     const qrCodeDataURL = await generateQRCodeDataURL(bookingId);
 
-    // Calculate total price
-    const pricePerPerson = parseFloat(event.price);
-    const totalPrice = pricePerPerson * number_of_people;
+    // SECURITY: Calculate total price server-side (never trust client)
+    const pricePerPerson = serverPrice;
+    const totalPrice = pricePerPerson * numPeople;
+    
+    // Additional validation: ensure price calculation is reasonable
+    if (totalPrice <= 0 || totalPrice > 1000000) {
+      logSecurityEvent("malicious_input", {
+        ip: security.clientIP,
+        path: request.nextUrl.pathname,
+        method: request.method,
+        reason: "Invalid total price calculated",
+      });
+      return NextResponse.json(
+        { error: "Invalid booking amount" },
+        { status: 400 }
+      );
+    }
 
+    // SECURITY: Use validated numPeople (not raw input)
+    // SECURITY: Use server-calculated totalPrice (never trust client)
     // Create booking
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
@@ -600,8 +666,8 @@ export async function POST(request: NextRequest) {
         id: bookingId,
         user_id: userId,
         event_id,
-        number_of_people: parseInt(number_of_people),
-        total_amount: totalPrice,
+        number_of_people: numPeople, // Use validated value
+        total_amount: totalPrice, // Server-calculated price
         payment_status: "completed", // Skip payment for now, mark as completed
         qr_code: qrCodeDataURL,
       })

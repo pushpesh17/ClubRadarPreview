@@ -12,6 +12,9 @@ const isPublicRoute = createRouteMatcher([
   "/venue/signup(.*)",
   "/sso-callback(.*)",
   "/api/webhooks(.*)",
+  "/api/venues(.*)", // Public API for discovering venues
+  "/api/events(.*)", // Public API for discovering events
+  "/api/venues/[id](.*)", // Public API for venue details
 ]);
 
 export default clerkMiddleware(async (auth, request: NextRequest) => {
