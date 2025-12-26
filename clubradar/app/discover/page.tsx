@@ -83,8 +83,18 @@ export default function DiscoverPage() {
         throw new Error(data.error || "Failed to load venues");
       }
 
-      setVenues(data.venues || []);
-      setFilteredVenues(data.venues || []);
+      // Sort venues: venues with active events first, then venues with no events at the bottom
+      const sortedVenues = (data.venues || []).sort((a: Venue, b: Venue) => {
+        // First, sort by activeEventsCount (descending) - venues with more events come first
+        if (b.activeEventsCount !== a.activeEventsCount) {
+          return b.activeEventsCount - a.activeEventsCount;
+        }
+        // If same number of events, sort alphabetically by name
+        return a.name.localeCompare(b.name);
+      });
+      
+      setVenues(sortedVenues);
+      setFilteredVenues(sortedVenues);
     } catch (error: any) {
       console.error("Error loading venues:", error);
       setVenues([]);
@@ -95,19 +105,31 @@ export default function DiscoverPage() {
   };
 
   const filterVenues = () => {
+    let filtered: Venue[];
+    
     if (!searchQuery.trim()) {
-      setFilteredVenues(venues);
-      return;
+      filtered = venues;
+    } else {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = venues.filter(
+        (venue) =>
+          venue.name.toLowerCase().includes(query) ||
+          venue.address.toLowerCase().includes(query) ||
+          venue.city.toLowerCase().includes(query)
+      );
     }
-
-    const query = searchQuery.toLowerCase().trim();
-    const filtered = venues.filter(
-      (venue) =>
-        venue.name.toLowerCase().includes(query) ||
-        venue.address.toLowerCase().includes(query) ||
-        venue.city.toLowerCase().includes(query)
-    );
-    setFilteredVenues(filtered);
+    
+    // Sort filtered venues: venues with active events first, then venues with no events at the bottom
+    const sortedFiltered = filtered.sort((a, b) => {
+      // First, sort by activeEventsCount (descending) - venues with more events come first
+      if (b.activeEventsCount !== a.activeEventsCount) {
+        return b.activeEventsCount - a.activeEventsCount;
+      }
+      // If same number of events, sort alphabetically by name
+      return a.name.localeCompare(b.name);
+    });
+    
+    setFilteredVenues(sortedFiltered);
   };
 
   return (

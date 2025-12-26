@@ -147,10 +147,36 @@ export async function GET(request: NextRequest) {
         activeEventsCount: eventCounts[venue.id] || 0,
       }));
 
-      return NextResponse.json({ venues: venuesWithCounts });
+      // Sort venues: venues with active events first, then venues with no events at the bottom
+      const sortedVenues = venuesWithCounts.sort((a: any, b: any) => {
+        // First, sort by activeEventsCount (descending) - venues with more events come first
+        if (b.activeEventsCount !== a.activeEventsCount) {
+          return b.activeEventsCount - a.activeEventsCount;
+        }
+        // If same number of events, sort alphabetically by name
+        return a.name.localeCompare(b.name);
+      });
+
+      return NextResponse.json({ venues: sortedVenues });
     }
 
-    return NextResponse.json({ venues: venues || [] });
+    // If no venues, return empty array (already sorted)
+    const venuesWithCounts = (venues || []).map((venue: any) => ({
+      ...venue,
+      activeEventsCount: 0,
+    }));
+
+    // Sort venues: venues with active events first, then venues with no events at the bottom
+    const sortedVenues = venuesWithCounts.sort((a: any, b: any) => {
+      // First, sort by activeEventsCount (descending) - venues with more events come first
+      if (b.activeEventsCount !== a.activeEventsCount) {
+        return b.activeEventsCount - a.activeEventsCount;
+      }
+      // If same number of events, sort alphabetically by name
+      return a.name.localeCompare(b.name);
+    });
+
+    return NextResponse.json({ venues: sortedVenues });
   } catch (error: any) {
     console.error("Unexpected error in GET /api/venues:", error);
     return NextResponse.json(
