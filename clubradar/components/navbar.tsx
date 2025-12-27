@@ -29,13 +29,16 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/lib/hooks/use-auth";
+import { useAdmin } from "@/lib/hooks/use-admin";
 import { useRouter } from "next/navigation";
 import { useClerk } from "@clerk/nextjs";
 import toast from "react-hot-toast";
+import { Shield } from "lucide-react";
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const { user, loading } = useAuth();
+  const { isAdmin } = useAdmin();
   const router = useRouter();
   const { signOut: clerkSignOut } = useClerk();
 
@@ -290,6 +293,22 @@ export function Navbar() {
                         My Bookings
                       </Link>
                     </Button>
+                    {isAdmin && (
+                      <Button
+                        variant="outline"
+                        asChild
+                        className="w-full h-10 border-purple-300 dark:border-purple-700 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950"
+                        onClick={() => setIsOpen(false)}
+                      >
+                        <Link
+                          href="/admin/dashboard"
+                          className="flex items-center justify-center font-semibold"
+                        >
+                          <Shield className="mr-2 h-4 w-4" />
+                          Admin Dashboard
+                        </Link>
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       className="w-full h-10 text-destructive hover:text-destructive hover:bg-destructive/10"
@@ -397,6 +416,20 @@ export function Navbar() {
                     My Bookings
                   </Link>
                 </DropdownMenuItem>
+                {isAdmin && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link
+                        href="/admin/dashboard"
+                        className="flex items-center cursor-pointer text-purple-600 dark:text-purple-400 font-semibold"
+                      >
+                        <Shield className="mr-2 h-4 w-4" />
+                        Admin Dashboard
+                      </Link>
+                    </DropdownMenuItem>
+                  </>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={handleLogout}

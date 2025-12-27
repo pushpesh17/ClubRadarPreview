@@ -99,6 +99,7 @@ export default function VenueDashboard() {
   const [venue, setVenue] = useState<Venue | null>(null);
   const [venueLoading, setVenueLoading] = useState(true);
   const [isApproved, setIsApproved] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState<string | null>(null);
   const [bookings, setBookings] = useState<any[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(false);
   const [bookingsPage, setBookingsPage] = useState(1);
@@ -477,6 +478,7 @@ export default function VenueDashboard() {
 
           setIsApproved(statusData.isApproved);
           setBookingPaused(statusData.venue.bookingPaused ?? false);
+          setRejectionReason(statusData.rejectionReason || null);
 
           // Load venue images if available
           if (
@@ -497,21 +499,28 @@ export default function VenueDashboard() {
           // Venue not approved - show message but allow viewing
           if (statusData.venue.status === "pending") {
             toast(
-              "Your venue registration is pending approval. You can view but not create events yet.",
+              "Your venue registration is pending approval. You'll be able to create events once approved.",
               {
                 icon: "⏳",
+                duration: 5000,
               }
             );
           } else if (statusData.venue.status === "rejected") {
-            toast.error(
-              "Your venue registration was rejected. Please contact support."
-            );
+            // Don't show toast here - we'll show a card instead
           }
           // Set loading to false
           if (isMounted) {
             setVenueLoading(false);
           }
         } else {
+          // Venue approved - show success message
+          toast.success(
+            "Your venue is approved! You can now create events and manage bookings.",
+            {
+              icon: "✅",
+              duration: 5000,
+            }
+          );
           // Load events if approved
           loadEvents();
           // Set loading to false after events start loading
@@ -1151,9 +1160,25 @@ export default function VenueDashboard() {
                     : "Registration Rejected"}
                 </CardTitle>
                 <CardDescription className="text-base sm:text-lg">
-                  {venue.status === "pending"
-                    ? "Your venue registration is pending approval. You can explore your dashboard, and you'll be able to create and publish events once our team approves your venue."
-                    : "Your venue registration was not approved."}
+                  {venue.status === "pending" ? (
+                    "Your venue registration is pending approval. You can explore your dashboard, and you'll be able to create and publish events once our team approves your venue."
+                  ) : (
+                    <div className="space-y-3">
+                      <p>
+                        Your venue registration was rejected. Please re-register with valid documents.
+                      </p>
+                      {rejectionReason && (
+                        <div className="mt-3 p-3 bg-red-100 dark:bg-red-900/30 rounded-lg border border-red-200 dark:border-red-800">
+                          <p className="text-sm font-medium text-red-900 dark:text-red-100 mb-1">
+                            Rejection Reason:
+                          </p>
+                          <p className="text-sm text-red-800 dark:text-red-200">
+                            {rejectionReason}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -1189,25 +1214,46 @@ export default function VenueDashboard() {
                   </>
                 )}
                 {venue.status === "rejected" && (
-                  <div className="rounded-lg bg-red-50 dark:bg-red-950/20 p-4 border border-red-200 dark:border-red-800">
-                    <p className="text-sm text-red-900 dark:text-red-200 leading-relaxed">
-                      Unfortunately, your venue registration was rejected.
-                      Please contact support for more information or submit a
-                      new registration from the registration page.
-                    </p>
+                  <div className="space-y-4">
+                    <div className="rounded-lg bg-red-50 dark:bg-red-950/20 p-4 border border-red-200 dark:border-red-800">
+                      <p className="text-sm text-red-900 dark:text-red-200 leading-relaxed mb-3">
+                        Unfortunately, your venue registration was rejected.
+                        Please review the rejection reason above and re-register with valid documents.
+                      </p>
+                    </div>
                   </div>
                 )}
                 <div className="flex flex-col sm:flex-row gap-3 pt-4">
-                  <Button
-                    variant="outline"
-                    onClick={() => router.push("/venue/signup")}
-                    className="flex-1 h-11 sm:h-12 text-sm sm:text-base font-semibold"
-                  >
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    {venue.status === "rejected"
-                      ? "Submit New Registration"
-                      : "View Registration Status"}
-                  </Button>
+                  {venue.status === "rejected" ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        onClick={() => router.back()}
+                        className="flex-1 h-11 sm:h-12 text-sm sm:text-base font-semibold"
+                      >
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        Go Back
+                      </Button>
+                      <Button
+                        asChild
+                        className="flex-1 h-11 sm:h-12 text-sm sm:text-base font-semibold bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                      >
+                        <Link href="/venue/signup">
+                          Re-register Venue
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </Link>
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      onClick={() => router.push("/venue/signup")}
+                      className="flex-1 h-11 sm:h-12 text-sm sm:text-base font-semibold"
+                    >
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      View Registration Status
+                    </Button>
+                  )}
                   {venue.status === "pending" && (
                     <Button
                       onClick={() => {

@@ -10,6 +10,17 @@ const nextConfig: NextConfig = {
   poweredByHeader: false, // Remove X-Powered-By header
   compress: true, // Enable gzip compression
 
+  // Images configuration - allow Supabase storage images
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "*.supabase.co",
+        pathname: "/storage/v1/object/public/**",
+      },
+    ],
+  },
+
   // Headers configuration (additional to middleware)
   async headers() {
     return [

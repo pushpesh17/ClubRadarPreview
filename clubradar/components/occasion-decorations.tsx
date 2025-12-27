@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-// Occasion configuration type
-export type OccasionType = "diwali" | "christmas" | "newyear" | "holi" | "default";
+import type { OccasionType } from "@/lib/occasion-config";
 
 interface OccasionConfig {
   emojis: string[];

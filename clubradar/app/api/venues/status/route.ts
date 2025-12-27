@@ -87,6 +87,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Check if description contains rejection message
+    const isRejected = venue.status === "rejected";
+    const rejectionReason = isRejected && venue.description 
+      ? venue.description 
+      : null;
+
     return NextResponse.json(
       {
         hasVenue: true,
@@ -104,12 +110,13 @@ export async function GET(request: NextRequest) {
           bookingPaused: venue.booking_paused ?? false,
         },
         isApproved: venue.status === "approved",
+        rejectionReason: rejectionReason,
         message:
           venue.status === "pending"
             ? "Your venue registration is pending approval. You'll be able to create events once approved."
             : venue.status === "approved"
-            ? "Your venue is approved! You can now create events."
-            : "Your venue registration was rejected. Please contact support.",
+            ? "Your venue is approved! You can now create events and manage bookings."
+            : "Your venue registration was rejected. Please re-register with valid documents.",
       },
       { status: 200 }
     );

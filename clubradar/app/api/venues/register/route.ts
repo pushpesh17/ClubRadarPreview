@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
       .from("venues")
       .select("id, status")
       .eq("user_id", userId)
-      .maybeSingle(); // Returns null instead of error when no row found
+      .maybeSingle(); // Returns null instead of error when no venue found
 
     if (checkError) {
       console.error("Error checking existing venue:", checkError);
@@ -154,16 +154,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (existingVenue) {
+    // If venue exists and is NOT rejected, prevent re-registration
+    if (existingVenue && existingVenue.status !== "rejected") {
       return NextResponse.json(
         { 
-          error: "You already have a venue registered",
+          error: existingVenue.status === "pending" 
+            ? "Your venue registration is pending approval. Please wait for admin review."
+            : "You already have an approved venue registered.",
           venueId: existingVenue.id,
           status: existingVenue.status
         },
         { status: 400 }
       );
     }
+
+    // If venue exists but is rejected, we'll update it instead of creating a new one
+    const isReRegistration = existingVenue && existingVenue.status === "rejected";
 
     // Ensure user exists in users table first (required for foreign key)
     // If user doesn't exist, create them automatically
@@ -391,36 +397,68 @@ export async function POST(request: NextRequest) {
     const sanitizedBankAccount = bankAccount ? sanitizeString(bankAccount) : null;
     const sanitizedIfscCode = ifscCode ? sanitizeString(ifscCode) : null;
 
-    // Create venue record with all KYC fields (using sanitized values)
-    const { data: venue, error: venueError } = await supabase
-      .from("venues")
-      .insert({
-        user_id: userId,
-        name: sanitizedName,
-        description: sanitizedDescription,
-        address: sanitizedAddress,
-        city: sanitizedCity,
-        pincode: sanitizedPincode,
-        phone: sanitizedPhone,
-        email: sanitizedEmail,
-        status: "pending", // Default status - needs admin approval
-        owner_name: sanitizedOwnerName,
-        alternate_phone: sanitizedAlternatePhone,
-        capacity: capacity ? parseInt(capacity.toString()) : null,
-        gst_number: sanitizedGstNumber,
-        license_number: sanitizedLicenseNumber,
-        pan_number: sanitizedPanNumber,
-        bank_account: sanitizedBankAccount,
-        ifsc_code: sanitizedIfscCode,
-        documents: documents || [], // Array of document URLs (already validated by sanitizeInput)
-      })
-      .select()
-      .single();
+    // Create or update venue record with all KYC fields (using sanitized values)
+    // When re-registering after rejection, preserve rejection history but reset status
+    const venueData: any = {
+      user_id: userId,
+      name: sanitizedName,
+      description: sanitizedDescription,
+      address: sanitizedAddress,
+      city: sanitizedCity,
+      pincode: sanitizedPincode,
+      phone: sanitizedPhone,
+      email: sanitizedEmail,
+      status: "pending", // Default status - needs admin approval (reset to pending for re-registration)
+      owner_name: sanitizedOwnerName,
+      alternate_phone: sanitizedAlternatePhone,
+      capacity: capacity ? parseInt(capacity.toString()) : null,
+      gst_number: sanitizedGstNumber,
+      license_number: sanitizedLicenseNumber,
+      pan_number: sanitizedPanNumber,
+      bank_account: sanitizedBankAccount,
+      ifsc_code: sanitizedIfscCode,
+      documents: documents || [], // Array of document URLs (already validated by sanitizeInput)
+      updated_at: new Date().toISOString(), // Update timestamp
+    };
+
+    // When re-registering, preserve rejection history (rejected_at and rejection_count stay the same)
+    // Only clear rejection_reason since it's a new submission
+    if (isReRegistration) {
+      // Don't update rejected_at or rejection_count - preserve history
+      // Clear rejection_reason since it's a new submission
+      venueData.rejection_reason = null;
+    }
+
+    let venue;
+    let venueError;
+
+    if (isReRegistration) {
+      // Update existing rejected venue
+      const { data: updatedVenue, error: updateError } = await supabase
+        .from("venues")
+        .update(venueData)
+        .eq("id", existingVenue!.id)
+        .select()
+        .single();
+      
+      venue = updatedVenue;
+      venueError = updateError;
+    } else {
+      // Create new venue
+      const { data: newVenue, error: insertError } = await supabase
+        .from("venues")
+        .insert(venueData)
+        .select()
+        .single();
+      
+      venue = newVenue;
+      venueError = insertError;
+    }
 
     if (venueError) {
-      console.error("Error creating venue:", venueError);
+      console.error(`Error ${isReRegistration ? "updating" : "creating"} venue:`, venueError);
       return NextResponse.json(
-        { error: "Failed to register venue", details: venueError.message },
+        { error: `Failed to ${isReRegistration ? "update" : "register"} venue`, details: venueError.message },
         { status: 500 }
       );
     }
@@ -435,10 +473,12 @@ export async function POST(request: NextRequest) {
           id: venue.id,
           name: venue.name,
           status: venue.status,
-          message: "Venue registration submitted successfully. Your application will be reviewed within 24-48 hours.",
+          message: isReRegistration
+            ? "Venue re-registration submitted successfully. Your application will be reviewed within 24-48 hours."
+            : "Venue registration submitted successfully. Your application will be reviewed within 24-48 hours.",
         },
       },
-      { status: 201 }
+      { status: isReRegistration ? 200 : 201 }
     );
   } catch (error: any) {
     console.error("Venue registration error:", error);

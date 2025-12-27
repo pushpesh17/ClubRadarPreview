@@ -7,7 +7,8 @@
  * You can also set this to "none" to disable decorations entirely.
  */
 
-import { OccasionType } from "@/components/occasion-decorations";
+// Define type here to avoid importing from client component
+export type OccasionType = "diwali" | "christmas" | "newyear" | "holi" | "default";
 
 // Change this value to switch occasions
 export const currentOccasion: OccasionType | "none" = "default";

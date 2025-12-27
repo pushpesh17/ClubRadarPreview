@@ -99,14 +99,12 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from("venue-documents")
-        .getPublicUrl(filePath);
-
+      // Store file path instead of public URL (bucket is private)
+      // Signed URLs will be generated on-demand when documents need to be viewed
+      // This keeps documents secure and only accessible to authorized users
       uploadedFiles.push({
         name: file.name,
-        url: urlData.publicUrl,
+        url: filePath, // Store file path, not public URL
       });
     }
 
