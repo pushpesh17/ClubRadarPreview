@@ -56,7 +56,10 @@ export async function GET(request: NextRequest) {
       );
 
     // Apply filters
-    if (status !== "all") {
+    // Note: For "rejected" status, we don't filter in the query because we want to include
+    // venues that were re-registered (status = "pending" but rejected_at exists)
+    // We'll filter in JavaScript after fetching
+    if (status !== "all" && status !== "rejected") {
       query = query.eq("status", status);
     }
 
@@ -79,10 +82,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Apply pagination
-    query = query.range(offset, offset + limit - 1);
+    // For "rejected" filter, fetch more venues to account for filtering
+    // For other statuses, apply pagination normally
+    if (status === "rejected") {
+      // Fetch more venues (up to 200) to ensure we get all rejected venues after filtering
+      query = query.range(0, 199);
+    } else {
+      query = query.range(offset, offset + limit - 1);
+    }
 
-    const { data: venues, error, count } = await query;
+    let { data: venues, error, count } = await query;
 
     if (error) {
       console.error("Error fetching venues:", error);
@@ -90,6 +99,22 @@ export async function GET(request: NextRequest) {
         { error: "Failed to fetch venues", details: error.message },
         { status: 500 }
       );
+    }
+
+    // If filtering by "rejected", filter venues that have rejection history
+    // even if their current status is "pending" (re-registered after rejection)
+    if (status === "rejected" && venues) {
+      // Filter venues that have rejected_at not null
+      const allRejectedVenues = venues.filter((venue: any) => venue.rejected_at !== null);
+      // Sort by rejected_at (most recent first)
+      allRejectedVenues.sort((a: any, b: any) => {
+        if (!a.rejected_at || !b.rejected_at) return 0;
+        return new Date(b.rejected_at).getTime() - new Date(a.rejected_at).getTime();
+      });
+      // Update count to total filtered count
+      count = allRejectedVenues.length;
+      // Apply pagination after filtering
+      venues = allRejectedVenues.slice(offset, offset + limit);
     }
 
     // Format response

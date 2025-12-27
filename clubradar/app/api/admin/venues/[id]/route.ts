@@ -49,6 +49,18 @@ export async function GET(
       .eq("id", id)
       .single();
 
+    // Get rejection history for this venue
+    const { data: rejectionHistory, error: historyError } = await supabase
+      .from("venue_rejection_history")
+      .select("*")
+      .eq("venue_id", id)
+      .order("rejected_at", { ascending: false });
+
+    if (historyError) {
+      console.error("Error fetching rejection history:", historyError);
+      // Continue even if history fetch fails
+    }
+
     if (error) {
       console.error("Error fetching venue:", error);
       return NextResponse.json(
@@ -129,6 +141,10 @@ export async function GET(
       panNumber: venue.pan_number,
       bankAccount: venue.bank_account,
       ifscCode: venue.ifsc_code,
+      // Rejection tracking
+      rejectedAt: venue.rejected_at || null,
+      rejectionCount: venue.rejection_count || 0,
+      rejectionReason: venue.rejection_reason || null,
       // Owner details
       owner: venue.users
         ? {
@@ -140,6 +156,15 @@ export async function GET(
         : null,
       createdAt: venue.created_at,
       updatedAt: venue.updated_at,
+      // Rejection history
+      rejectionHistory: (rejectionHistory || []).map((history: any) => ({
+        id: history.id,
+        rejectionNumber: history.rejection_number,
+        rejectionReason: history.rejection_reason,
+        rejectedBy: history.rejected_by,
+        rejectedAt: history.rejected_at,
+        venueSnapshot: history.venue_snapshot,
+      })),
     };
 
     return NextResponse.json(

@@ -1612,17 +1612,20 @@ export default function VenueSignup() {
               </CardContent>
             </Card>
 
-            <div className="mt-6 sm:mt-8 text-center">
-              <p className="text-sm sm:text-base text-muted-foreground">
-                Already have an account?{" "}
-                <Link
-                  href="/venue/dashboard"
-                  className="font-medium text-primary hover:underline"
-                >
-                  Sign in to your dashboard
-                </Link>
-              </p>
-            </div>
+            {/* Only show "Already have an account?" message if user is not logged in */}
+            {!authLoading && !user && (
+              <div className="mt-6 sm:mt-8 text-center">
+                <p className="text-sm sm:text-base text-muted-foreground">
+                  Already have an account?{" "}
+                  <Link
+                    href="/venue/dashboard"
+                    className="font-medium text-primary hover:underline"
+                  >
+                    Sign in to your dashboard
+                  </Link>
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

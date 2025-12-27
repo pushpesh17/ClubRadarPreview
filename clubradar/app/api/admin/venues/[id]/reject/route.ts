@@ -12,7 +12,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdmin();
+    const { email: adminEmail } = await requireAdmin();
 
     const { id } = await params;
     const body = await request.json();
@@ -35,15 +35,88 @@ export async function POST(
       },
     });
 
-    // First, get current venue to check rejection_count
-    const { data: currentVenue } = await supabase
+    // First, get full venue data to create a snapshot before rejecting
+    const { data: currentVenue, error: fetchError } = await supabase
       .from("venues")
-      .select("rejection_count")
+      .select(
+        `
+        *,
+        users (
+          id,
+          name,
+          email,
+          phone
+        )
+      `
+      )
       .eq("id", id)
       .single();
 
-    const currentRejectionCount = currentVenue?.rejection_count || 0;
+    if (fetchError || !currentVenue) {
+      return NextResponse.json(
+        { error: "Venue not found", details: fetchError?.message },
+        { status: 404 }
+      );
+    }
+
+    const currentRejectionCount = currentVenue.rejection_count || 0;
     const rejectionMessage = reason || "Registration rejected by admin. Please re-register with valid documents.";
+    
+    // Create snapshot of venue data at time of rejection
+    const venueSnapshot = {
+      // Basic Info
+      name: currentVenue.name,
+      description: currentVenue.description,
+      address: currentVenue.address,
+      city: currentVenue.city,
+      pincode: currentVenue.pincode,
+      phone: currentVenue.phone,
+      email: currentVenue.email,
+      
+      // Owner Info
+      owner_name: currentVenue.owner_name,
+      alternate_phone: currentVenue.alternate_phone,
+      
+      // KYC Details
+      gst_number: currentVenue.gst_number,
+      license_number: currentVenue.license_number,
+      pan_number: currentVenue.pan_number,
+      bank_account: currentVenue.bank_account,
+      ifsc_code: currentVenue.ifsc_code,
+      
+      // Documents
+      documents: currentVenue.documents || [],
+      images: currentVenue.images || [],
+      
+      // Owner details from users table
+      owner: currentVenue.users ? {
+        id: currentVenue.users.id,
+        name: currentVenue.users.name,
+        email: currentVenue.users.email,
+        phone: currentVenue.users.phone,
+      } : null,
+      
+      // Metadata
+      status: currentVenue.status,
+      created_at: currentVenue.created_at,
+      updated_at: currentVenue.updated_at,
+    };
+
+    // Save rejection history snapshot
+    const { error: historyError } = await supabase
+      .from("venue_rejection_history")
+      .insert({
+        venue_id: id,
+        rejection_reason: rejectionMessage,
+        rejected_by: adminEmail || "admin",
+        rejection_number: currentRejectionCount + 1,
+        venue_snapshot: venueSnapshot,
+      });
+
+    if (historyError) {
+      console.error("Error saving rejection history:", historyError);
+      // Continue with rejection even if history save fails
+    }
     
     // Update venue status to rejected
     // Store rejection reason in rejection_reason field and track rejection history

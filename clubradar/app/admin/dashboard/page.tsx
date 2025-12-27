@@ -62,6 +62,38 @@ interface Venue {
   createdAt: string;
 }
 
+interface RejectionHistoryItem {
+  id: string;
+  rejectionNumber: number;
+  rejectionReason: string;
+  rejectedBy: string | null;
+  rejectedAt: string;
+  venueSnapshot: {
+    name: string;
+    description: string | null;
+    address: string;
+    city: string;
+    pincode: string | null;
+    phone: string | null;
+    email: string | null;
+    owner_name: string | null;
+    alternate_phone: string | null;
+    gst_number: string | null;
+    license_number: string | null;
+    pan_number: string | null;
+    bank_account: string | null;
+    ifsc_code: string | null;
+    documents: string[];
+    images: string[];
+    owner: {
+      id: string;
+      name: string;
+      email: string;
+      phone: string;
+    } | null;
+  };
+}
+
 interface VenueDetail {
   id: string;
   name: string;
@@ -83,12 +115,16 @@ interface VenueDetail {
   panNumber: string | null;
   bankAccount: string | null;
   ifscCode: string | null;
+  rejectedAt: string | null;
+  rejectionCount: number;
+  rejectionReason: string | null;
   owner: {
     id: string;
     name: string;
     email: string;
     phone: string;
   } | null;
+  rejectionHistory?: RejectionHistoryItem[];
   createdAt: string;
   updatedAt: string;
 }
@@ -379,7 +415,16 @@ export default function AdminDashboard() {
 
   // Get pending and rejected venues for overview (from overviewVenues, not filtered venues)
   const pendingVenues = overviewVenues.filter((v) => v.status === "pending").slice(0, 5);
-  const rejectedVenues = overviewVenues.filter((v) => v.status === "rejected").slice(0, 5);
+  // Show venues that have been rejected (have rejectedAt) regardless of current status
+  // This includes venues that were rejected and then re-registered (status = "pending" but rejectedAt exists)
+  const rejectedVenues = overviewVenues
+    .filter((v) => v.rejectedAt !== null && v.rejectedAt !== undefined)
+    .sort((a, b) => {
+      // Sort by rejectedAt date (most recent first)
+      if (!a.rejectedAt || !b.rejectedAt) return 0;
+      return new Date(b.rejectedAt).getTime() - new Date(a.rejectedAt).getTime();
+    })
+    .slice(0, 5);
   const recentBookings = bookings.slice(0, 5);
 
   return (
@@ -608,12 +653,17 @@ export default function AdminDashboard() {
                                   {venue.owner.name} • {venue.owner.email}
                                 </p>
                               )}
-                              <p className="text-xs text-muted-foreground mt-1">
-                                {venue.rejectedAt 
-                                  ? `Rejected ${venue.rejectionCount ? `${venue.rejectionCount} time${venue.rejectionCount > 1 ? 's' : ''}` : ''} on ${new Date(venue.rejectedAt).toLocaleDateString()}`
-                                  : `Created: ${new Date(venue.createdAt).toLocaleDateString()}`
-                                }
-                              </p>
+                              <div className="mt-1 space-y-0.5">
+                                <p className="text-xs text-muted-foreground">
+                                  Created: {new Date(venue.createdAt).toLocaleDateString()}
+                                </p>
+                                {venue.rejectedAt && (
+                                  <p className="text-xs text-red-600 dark:text-red-400 font-medium">
+                                    Rejected {venue.rejectionCount ? `${venue.rejectionCount} time${venue.rejectionCount > 1 ? 's' : ''}` : 'once'} on {new Date(venue.rejectedAt).toLocaleDateString()}
+                                    {venue.status === "pending" && " (Re-registered)"}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                             <Button
                               size="sm"
@@ -1227,6 +1277,149 @@ export default function AdminDashboard() {
                               View
                             </Button>
                           )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Rejection History */}
+              {selectedVenueDetail.rejectionHistory && selectedVenueDetail.rejectionHistory.length > 0 && (
+                <div className="space-y-3 sm:space-y-4">
+                  <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-red-600" />
+                    Rejection History ({selectedVenueDetail.rejectionHistory.length})
+                  </h3>
+                  <div className="space-y-3 sm:space-y-4">
+                    {selectedVenueDetail.rejectionHistory.map((history, index) => {
+                      const snapshot = history.venueSnapshot;
+                      const currentData = selectedVenueDetail;
+                      const hasChanges = 
+                        snapshot.name !== currentData.name ||
+                        snapshot.address !== currentData.address ||
+                        snapshot.city !== currentData.city ||
+                        snapshot.phone !== currentData.phone ||
+                        snapshot.email !== currentData.email ||
+                        snapshot.owner_name !== currentData.ownerName ||
+                        snapshot.gst_number !== currentData.gstNumber ||
+                        snapshot.license_number !== currentData.licenseNumber ||
+                        snapshot.pan_number !== currentData.panNumber ||
+                        JSON.stringify(snapshot.documents || []) !== JSON.stringify(currentData.documents || []);
+
+                      return (
+                        <div
+                          key={history.id}
+                          className="border rounded-lg p-3 sm:p-4 bg-red-50/50 dark:bg-red-950/10 border-red-200 dark:border-red-800"
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div>
+                              <p className="font-semibold text-sm sm:text-base">
+                                Rejection #{history.rejectionNumber}
+                              </p>
+                              <p className="text-xs sm:text-sm text-muted-foreground">
+                                {new Date(history.rejectedAt).toLocaleString()}
+                                {history.rejectedBy && ` • By ${history.rejectedBy}`}
+                              </p>
+                            </div>
+                            {hasChanges && (
+                              <Badge variant="outline" className="text-[10px] sm:text-xs">
+                                Changes Detected
+                              </Badge>
+                            )}
+                          </div>
+
+                          <div className="mb-3">
+                            <p className="text-xs sm:text-sm font-medium mb-1">Rejection Reason:</p>
+                            <p className="text-xs sm:text-sm text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/30 p-2 rounded">
+                              {history.rejectionReason}
+                            </p>
+                          </div>
+
+                          {/* Comparison View */}
+                          {hasChanges && (
+                            <div className="mt-3 space-y-2">
+                              <p className="text-xs sm:text-sm font-semibold">Comparison with Current Submission:</p>
+                              <div className="space-y-1.5 text-xs sm:text-sm">
+                                {snapshot.name !== currentData.name && (
+                                  <div className="flex gap-2">
+                                    <span className="text-muted-foreground min-w-[80px]">Name:</span>
+                                    <span className="line-through text-red-600">{snapshot.name}</span>
+                                    <span className="text-green-600">→ {currentData.name}</span>
+                                  </div>
+                                )}
+                                {snapshot.address !== currentData.address && (
+                                  <div className="flex gap-2">
+                                    <span className="text-muted-foreground min-w-[80px]">Address:</span>
+                                    <span className="line-through text-red-600 break-words">{snapshot.address}</span>
+                                    <span className="text-green-600 break-words">→ {currentData.address}</span>
+                                  </div>
+                                )}
+                                {snapshot.city !== currentData.city && (
+                                  <div className="flex gap-2">
+                                    <span className="text-muted-foreground min-w-[80px]">City:</span>
+                                    <span className="line-through text-red-600">{snapshot.city}</span>
+                                    <span className="text-green-600">→ {currentData.city}</span>
+                                  </div>
+                                )}
+                                {snapshot.phone !== currentData.phone && (
+                                  <div className="flex gap-2">
+                                    <span className="text-muted-foreground min-w-[80px]">Phone:</span>
+                                    <span className="line-through text-red-600">{snapshot.phone || "N/A"}</span>
+                                    <span className="text-green-600">→ {currentData.phone || "N/A"}</span>
+                                  </div>
+                                )}
+                                {snapshot.email !== currentData.email && (
+                                  <div className="flex gap-2">
+                                    <span className="text-muted-foreground min-w-[80px]">Email:</span>
+                                    <span className="line-through text-red-600 break-all">{snapshot.email || "N/A"}</span>
+                                    <span className="text-green-600 break-all">→ {currentData.email || "N/A"}</span>
+                                  </div>
+                                )}
+                                {snapshot.gst_number !== currentData.gstNumber && (
+                                  <div className="flex gap-2">
+                                    <span className="text-muted-foreground min-w-[80px]">GST:</span>
+                                    <span className="line-through text-red-600">{snapshot.gst_number || "N/A"}</span>
+                                    <span className="text-green-600">→ {currentData.gstNumber || "N/A"}</span>
+                                  </div>
+                                )}
+                                {snapshot.pan_number !== currentData.panNumber && (
+                                  <div className="flex gap-2">
+                                    <span className="text-muted-foreground min-w-[80px]">PAN:</span>
+                                    <span className="line-through text-red-600">{snapshot.pan_number || "N/A"}</span>
+                                    <span className="text-green-600">→ {currentData.panNumber || "N/A"}</span>
+                                  </div>
+                                )}
+                                {JSON.stringify(snapshot.documents || []) !== JSON.stringify(currentData.documents || []) && (
+                                  <div className="flex gap-2">
+                                    <span className="text-muted-foreground min-w-[80px]">Documents:</span>
+                                    <span className="text-muted-foreground">
+                                      {snapshot.documents?.length || 0} → {currentData.documents?.length || 0} files
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Previous Submission Details (Collapsible) */}
+                          <details className="mt-3">
+                            <summary className="text-xs sm:text-sm font-medium cursor-pointer hover:text-primary">
+                              View Previous Submission Details
+                            </summary>
+                            <div className="mt-2 p-2 bg-muted rounded text-xs sm:text-sm space-y-1.5">
+                              <div><strong>Name:</strong> {snapshot.name}</div>
+                              <div><strong>Address:</strong> {snapshot.address}</div>
+                              <div><strong>City:</strong> {snapshot.city}</div>
+                              <div><strong>Phone:</strong> {snapshot.phone || "N/A"}</div>
+                              <div><strong>Email:</strong> {snapshot.email || "N/A"}</div>
+                              <div><strong>Owner:</strong> {snapshot.owner_name || "N/A"}</div>
+                              <div><strong>GST:</strong> {snapshot.gst_number || "N/A"}</div>
+                              <div><strong>License:</strong> {snapshot.license_number || "N/A"}</div>
+                              <div><strong>PAN:</strong> {snapshot.pan_number || "N/A"}</div>
+                              <div><strong>Documents:</strong> {snapshot.documents?.length || 0} files</div>
+                            </div>
+                          </details>
                         </div>
                       );
                     })}
