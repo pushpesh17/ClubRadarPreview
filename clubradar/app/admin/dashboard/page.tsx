@@ -233,9 +233,16 @@ export default function AdminDashboard() {
   const [overviewVenuesLoading, setOverviewVenuesLoading] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [payouts, setPayouts] = useState<Payout[]>([]);
+  const [venueRevenue, setVenueRevenue] = useState<any[]>([]);
+  const [revenueLoading, setRevenueLoading] = useState(false);
   const [venuesLoading, setVenuesLoading] = useState(false);
   const [bookingsLoading, setBookingsLoading] = useState(false);
   const [payoutsLoading, setPayoutsLoading] = useState(false);
+  
+  // Revenue analytics filters
+  const [revenueStartDate, setRevenueStartDate] = useState("");
+  const [revenueEndDate, setRevenueEndDate] = useState("");
+  const [showRevenueAnalytics, setShowRevenueAnalytics] = useState(false);
   
   // Filters
   const [venueSearch, setVenueSearch] = useState("");
@@ -415,6 +422,74 @@ export default function AdminDashboard() {
       toast.error(error.message || "Failed to load payouts");
     } finally {
       setPayoutsLoading(false);
+    }
+  };
+
+  // Load venue revenue analytics
+  const loadVenueRevenue = async (startDate?: string, endDate?: string) => {
+    setRevenueLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (startDate) params.append("startDate", startDate);
+      if (endDate) params.append("endDate", endDate);
+
+      const response = await fetch(`/api/admin/payouts/revenue?${params}`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to load revenue data");
+      }
+
+      setVenueRevenue(data.revenue || []);
+    } catch (error: any) {
+      console.error("Error loading venue revenue:", error);
+      toast.error(error.message || "Failed to load revenue data");
+    } finally {
+      setRevenueLoading(false);
+    }
+  };
+
+  // Bulk generate payouts
+  const handleBulkGeneratePayouts = async () => {
+    if (!revenueStartDate || !revenueEndDate) {
+      toast.error("Please select a date range first");
+      return;
+    }
+
+    if (!confirm(`Generate payouts for ALL approved venues from ${revenueStartDate} to ${revenueEndDate}?`)) {
+      return;
+    }
+
+    setIsGeneratingPayout(true);
+    try {
+      const response = await fetch("/api/admin/payouts/bulk-generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          periodStartDate: revenueStartDate,
+          periodEndDate: revenueEndDate,
+          commissionRate: generatePayoutData.commissionRate,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to generate bulk payouts");
+      }
+
+      toast.success(
+        `Bulk payout generation complete: ${data.summary.successful} successful, ${data.summary.skipped} skipped, ${data.summary.failed} failed`
+      );
+      loadPayouts(payoutPage, payoutStatusFilter, payoutVenueFilter);
+      loadVenueRevenue(revenueStartDate, revenueEndDate);
+    } catch (error: any) {
+      console.error("Error generating bulk payouts:", error);
+      toast.error(error.message || "Failed to generate bulk payouts");
+    } finally {
+      setIsGeneratingPayout(false);
     }
   };
 
@@ -1231,6 +1306,186 @@ export default function AdminDashboard() {
 
             {/* Payments Tab */}
             <TabsContent value="payments" className="space-y-4 mt-4">
+              {/* Revenue Analytics Section */}
+              <Card>
+                <CardHeader className="p-3 sm:p-6">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+                    <div>
+                      <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
+                        Revenue Analytics & Management
+                      </CardTitle>
+                      <CardDescription className="text-xs sm:text-sm">
+                        View revenue for all venues and manage bulk payouts
+                      </CardDescription>
+                    </div>
+                    <Button
+                      variant={showRevenueAnalytics ? "default" : "outline"}
+                      onClick={() => {
+                        setShowRevenueAnalytics(!showRevenueAnalytics);
+                        if (!showRevenueAnalytics) {
+                          // Set default to current month if not set
+                          if (!revenueStartDate || !revenueEndDate) {
+                            const now = new Date();
+                            const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+                            const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                            setRevenueStartDate(firstDay.toISOString().split('T')[0]);
+                            setRevenueEndDate(lastDay.toISOString().split('T')[0]);
+                            loadVenueRevenue(firstDay.toISOString().split('T')[0], lastDay.toISOString().split('T')[0]);
+                          } else {
+                            loadVenueRevenue(revenueStartDate, revenueEndDate);
+                          }
+                        }
+                      }}
+                      className="w-full sm:w-auto text-xs sm:text-sm h-9 sm:h-10"
+                    >
+                      <TrendingUp className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      {showRevenueAnalytics ? "Hide Analytics" : "Show Revenue Analytics"}
+                    </Button>
+                  </div>
+                </CardHeader>
+                {showRevenueAnalytics && (
+                  <CardContent className="p-3 sm:p-6 space-y-4">
+                    {/* Date Range Filter */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                      <div>
+                        <Label htmlFor="revenue-start-date" className="text-xs sm:text-sm">Start Date</Label>
+                        <Input
+                          id="revenue-start-date"
+                          type="date"
+                          value={revenueStartDate}
+                          onChange={(e) => {
+                            setRevenueStartDate(e.target.value);
+                            if (revenueEndDate) {
+                              loadVenueRevenue(e.target.value, revenueEndDate);
+                            }
+                          }}
+                          className="text-xs sm:text-sm h-9 sm:h-10"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="revenue-end-date" className="text-xs sm:text-sm">End Date</Label>
+                        <Input
+                          id="revenue-end-date"
+                          type="date"
+                          value={revenueEndDate}
+                          onChange={(e) => {
+                            setRevenueEndDate(e.target.value);
+                            if (revenueStartDate) {
+                              loadVenueRevenue(revenueStartDate, e.target.value);
+                            }
+                          }}
+                          className="text-xs sm:text-sm h-9 sm:h-10"
+                        />
+                      </div>
+                      <div className="flex items-end">
+                        <Button
+                          onClick={() => {
+                            if (revenueStartDate && revenueEndDate) {
+                              loadVenueRevenue(revenueStartDate, revenueEndDate);
+                            }
+                          }}
+                          disabled={!revenueStartDate || !revenueEndDate}
+                          className="w-full text-xs sm:text-sm h-9 sm:h-10"
+                        >
+                          <Search className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                          Load Revenue
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Bulk Actions */}
+                    {revenueStartDate && revenueEndDate && (
+                      <div className="flex flex-col sm:flex-row gap-2 pt-3 border-t">
+                        <Button
+                          onClick={handleBulkGeneratePayouts}
+                          disabled={isGeneratingPayout}
+                          className="w-full sm:w-auto text-xs sm:text-sm h-9 sm:h-10"
+                        >
+                          {isGeneratingPayout ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                              Generate Payouts for All Venues
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Revenue Table */}
+                    {revenueLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : venueRevenue.length > 0 ? (
+                      <div className="space-y-3">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs sm:text-sm border-collapse">
+                            <thead>
+                              <tr className="border-b bg-muted/50">
+                                <th className="text-left p-2 sm:p-3 font-semibold">Venue</th>
+                                <th className="text-left p-2 sm:p-3 font-semibold">City</th>
+                                <th className="text-right p-2 sm:p-3 font-semibold">Revenue</th>
+                                <th className="text-right p-2 sm:p-3 font-semibold">Bookings</th>
+                                <th className="text-center p-2 sm:p-3 font-semibold">Payout Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {venueRevenue.map((venue) => (
+                                <tr key={venue.venueId} className="border-b hover:bg-muted/50">
+                                  <td className="p-2 sm:p-3 font-medium">{venue.venueName}</td>
+                                  <td className="p-2 sm:p-3 text-muted-foreground">{venue.city}</td>
+                                  <td className="p-2 sm:p-3 text-right font-semibold text-green-600">
+                                    ₹{venue.totalRevenue.toLocaleString()}
+                                  </td>
+                                  <td className="p-2 sm:p-3 text-right">{venue.bookingCount}</td>
+                                  <td className="p-2 sm:p-3 text-center">
+                                    {venue.hasExistingPayout ? (
+                                      <Badge variant="default" className="text-[10px] sm:text-xs">
+                                        Payout Exists
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="outline" className="text-[10px] sm:text-xs">
+                                        No Payout
+                                      </Badge>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="border-t-2 font-bold bg-muted/50">
+                                <td colSpan={2} className="p-2 sm:p-3">Total</td>
+                                <td className="p-2 sm:p-3 text-right text-green-600">
+                                  ₹{venueRevenue.reduce((sum, v) => sum + v.totalRevenue, 0).toLocaleString()}
+                                </td>
+                                <td className="p-2 sm:p-3 text-right">
+                                  {venueRevenue.reduce((sum, v) => sum + v.bookingCount, 0)}
+                                </td>
+                                <td className="p-2 sm:p-3 text-center">
+                                  {venueRevenue.filter(v => v.hasExistingPayout).length} / {venueRevenue.length}
+                                </td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-8">
+                        {revenueStartDate && revenueEndDate
+                          ? "No revenue data found for selected period"
+                          : "Select a date range to view revenue analytics"}
+                      </p>
+                    )}
+                  </CardContent>
+                )}
+              </Card>
+
               {/* Summary Stats */}
               <div className="grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-4">
                 <Card>
