@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -31,9 +32,18 @@ import {
   MapPin,
   CreditCard,
   X,
+  ArrowLeft,
+  ArrowRight,
+  Plus,
+  CheckCircle,
+  Clock,
+  TrendingUp,
+  Download,
+  Filter,
 } from "lucide-react";
 import { Sidebar } from "@/components/sidebar";
 import toast from "react-hot-toast";
+import { generatePayoutPDF } from "@/lib/pdf-generator";
 import {
   Dialog,
   DialogContent,
@@ -154,6 +164,39 @@ interface Booking {
   createdAt: string;
 }
 
+interface Payout {
+  id: string;
+  venueId: string;
+  venue: {
+    id: string;
+    name: string;
+    city: string;
+    ownerName: string | null;
+    bankAccount: string | null;
+    ifscCode: string | null;
+  } | null;
+  payoutAmount: number;
+  commissionRate: number;
+  commissionAmount: number;
+  netAmount: number;
+  periodStartDate: string;
+  periodEndDate: string;
+  status: "pending" | "processing" | "processed" | "failed" | "cancelled";
+  paymentMethod: string;
+  bankAccount: string | null;
+  ifscCode: string | null;
+  accountHolderName: string | null;
+  transactionId: string | null;
+  transactionDate: string | null;
+  processedBy: string | null;
+  processedAt: string | null;
+  notes: string | null;
+  bookingCount: number;
+  totalRevenue: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface Stats {
   venues: {
     total: number;
@@ -186,10 +229,13 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [venues, setVenues] = useState<Venue[]>([]); // For Venues tab (filtered)
   const [overviewVenues, setOverviewVenues] = useState<Venue[]>([]); // For Overview tab (always all venues)
+  const [approvedVenues, setApprovedVenues] = useState<Venue[]>([]); // For payout dialog (only approved venues)
   const [overviewVenuesLoading, setOverviewVenuesLoading] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [payouts, setPayouts] = useState<Payout[]>([]);
   const [venuesLoading, setVenuesLoading] = useState(false);
   const [bookingsLoading, setBookingsLoading] = useState(false);
+  const [payoutsLoading, setPayoutsLoading] = useState(false);
   
   // Filters
   const [venueSearch, setVenueSearch] = useState("");
@@ -197,10 +243,26 @@ export default function AdminDashboard() {
   const [venuePage, setVenuePage] = useState(1);
   const [venueTotalPages, setVenueTotalPages] = useState(1);
   
+  // Payout filters
+  const [payoutStatusFilter, setPayoutStatusFilter] = useState("all");
+  const [payoutPage, setPayoutPage] = useState(1);
+  const [payoutTotalPages, setPayoutTotalPages] = useState(1);
+  const [payoutVenueFilter, setPayoutVenueFilter] = useState("all");
+  
   // Venue detail modal
   const [selectedVenueDetail, setSelectedVenueDetail] = useState<VenueDetail | null>(null);
   const [isVenueDetailOpen, setIsVenueDetailOpen] = useState(false);
   const [venueDetailLoading, setVenueDetailLoading] = useState(false);
+
+  // Generate payout dialog
+  const [showGeneratePayoutDialog, setShowGeneratePayoutDialog] = useState(false);
+  const [generatePayoutData, setGeneratePayoutData] = useState({
+    venueId: "",
+    periodStartDate: "",
+    periodEndDate: "",
+    commissionRate: 10.0,
+  });
+  const [isGeneratingPayout, setIsGeneratingPayout] = useState(false);
 
   const sidebarItems = [
     { title: "Overview", href: "/admin/dashboard", icon: LayoutDashboard, tabValue: "overview" },
@@ -302,6 +364,60 @@ export default function AdminDashboard() {
     }
   };
 
+  // Load approved venues for payout dialog
+  const loadApprovedVenues = async () => {
+    try {
+      console.log("Loading approved venues...");
+      const params = new URLSearchParams({
+        page: "1",
+        limit: "1000", // Get all approved venues
+        status: "approved",
+      });
+
+      const response = await fetch(`/api/admin/venues?${params}`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to load venues");
+      }
+
+      console.log("Approved venues loaded:", data.venues?.length || 0);
+      setApprovedVenues(data.venues || []);
+    } catch (error: any) {
+      console.error("Error loading approved venues:", error);
+      toast.error(`Failed to load venues: ${error.message}`);
+      setApprovedVenues([]);
+    }
+  };
+
+  // Load payouts
+  const loadPayouts = async (page: number = 1, status: string = "all", venueId: string = "all") => {
+    setPayoutsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: "20",
+        ...(status !== "all" && { status }),
+        ...(venueId !== "all" && { venueId }),
+      });
+
+      const response = await fetch(`/api/admin/payouts?${params}`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to load payouts");
+      }
+
+      setPayouts(data.payouts || []);
+      setPayoutTotalPages(data.pagination?.totalPages || 1);
+    } catch (error: any) {
+      console.error("Error loading payouts:", error);
+      toast.error(error.message || "Failed to load payouts");
+    } finally {
+      setPayoutsLoading(false);
+    }
+  };
+
   // Approve venue
   const handleApproveVenue = async (venueId: string) => {
     try {
@@ -346,6 +462,108 @@ export default function AdminDashboard() {
       setIsVenueDetailOpen(false);
     } finally {
       setVenueDetailLoading(false);
+    }
+  };
+
+  // Generate payout
+  const handleGeneratePayout = async () => {
+    if (!generatePayoutData.venueId || !generatePayoutData.periodStartDate || !generatePayoutData.periodEndDate) {
+      toast.error("Please fill all required fields");
+      return;
+    }
+
+    setIsGeneratingPayout(true);
+    try {
+      const response = await fetch("/api/admin/payouts/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          venueId: generatePayoutData.venueId,
+          periodStartDate: generatePayoutData.periodStartDate,
+          periodEndDate: generatePayoutData.periodEndDate,
+          commissionRate: generatePayoutData.commissionRate,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to generate payout");
+      }
+
+      // Show appropriate message based on payout amount
+      if (data.payout.totalRevenue === 0) {
+        toast.success(data.message || `Payout created: ₹0 (No revenue in this period)`);
+      } else {
+        toast.success(data.message || `Payout generated: ₹${data.payout.netAmount.toLocaleString()} for ${data.payout.bookingCount} booking${data.payout.bookingCount !== 1 ? 's' : ''}`);
+      }
+      setShowGeneratePayoutDialog(false);
+      setGeneratePayoutData({
+        venueId: "",
+        periodStartDate: "",
+        periodEndDate: "",
+        commissionRate: 10.0,
+      });
+      loadPayouts(payoutPage, payoutStatusFilter, payoutVenueFilter);
+    } catch (error: any) {
+      console.error("Error generating payout:", error);
+      toast.error(error.message || "Failed to generate payout");
+    } finally {
+      setIsGeneratingPayout(false);
+    }
+  };
+
+  // Process payout
+  const handleProcessPayout = async (payoutId: string) => {
+    const transactionId = prompt("Enter transaction ID (NEFT/RTGS reference):");
+    if (!transactionId) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/payouts/${payoutId}/process`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          transactionId: transactionId.trim(),
+          status: "processed",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to process payout");
+      }
+
+      toast.success("Payout marked as processed successfully");
+      loadPayouts(payoutPage, payoutStatusFilter, payoutVenueFilter);
+    } catch (error: any) {
+      console.error("Error processing payout:", error);
+      toast.error(error.message || "Failed to process payout");
+    }
+  };
+
+  // Download payout PDF
+  const handleDownloadPayoutPDF = async (payoutId: string) => {
+    try {
+      const response = await fetch(`/api/admin/payouts/${payoutId}/download`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to fetch payout data");
+      }
+
+      // Generate and download PDF
+      generatePayoutPDF(data.payout);
+      toast.success("Payout slip downloaded successfully");
+    } catch (error: any) {
+      console.error("Error downloading payout PDF:", error);
+      toast.error(error.message || "Failed to download payout slip");
     }
   };
 
@@ -400,6 +618,10 @@ export default function AdminDashboard() {
       loadVenues(1, venueSearch, venueStatusFilter);
     } else if (activeTab === "bookings") {
       loadBookings();
+    } else if (activeTab === "payments") {
+      loadPayouts(1, payoutStatusFilter, payoutVenueFilter);
+      // Always load approved venues when switching to Payments tab
+      loadApprovedVenues();
     } else if (activeTab === "overview") {
       // Refresh overview venues when switching to Overview tab
       loadOverviewVenues();
@@ -412,6 +634,13 @@ export default function AdminDashboard() {
       loadVenues(venuePage, venueSearch, venueStatusFilter);
     }
   }, [venuePage, venueSearch, venueStatusFilter, activeTab]);
+
+  // Reload payouts when filters change (only if on payments tab)
+  useEffect(() => {
+    if (activeTab === "payments") {
+      loadPayouts(payoutPage, payoutStatusFilter, payoutVenueFilter);
+    }
+  }, [payoutPage, payoutStatusFilter, payoutVenueFilter, activeTab]);
 
   // Get pending and rejected venues for overview (from overviewVenues, not filtered venues)
   const pendingVenues = overviewVenues.filter((v) => v.status === "pending").slice(0, 5);
@@ -1001,47 +1230,276 @@ export default function AdminDashboard() {
             </TabsContent>
 
             {/* Payments Tab */}
-            <TabsContent value="payments" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Payment & Revenue Reports</CardTitle>
-                  <CardDescription>
-                    Platform revenue and financial overview
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  {stats ? (
-                    <>
-                      <div className="grid gap-4 md:grid-cols-3">
-                        <div className="rounded-lg border p-4">
-                          <p className="text-sm text-muted-foreground">
-                            Total Platform Revenue
-                          </p>
-                          <p className="text-2xl font-bold">{stats.revenue.formatted}</p>
-                          <p className="text-xs text-muted-foreground">
-                            From {stats.bookings.completed} completed bookings
-                          </p>
-                        </div>
-                        <div className="rounded-lg border p-4">
-                          <p className="text-sm text-muted-foreground">Total Bookings</p>
-                          <p className="text-2xl font-bold">
-                            {stats.bookings.total.toLocaleString()}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {stats.bookings.pending} pending
-                          </p>
-                        </div>
-                        <div className="rounded-lg border p-4">
-                          <p className="text-sm text-muted-foreground">Today&apos;s Bookings</p>
-                          <p className="text-2xl font-bold">{stats.bookings.today}</p>
-                          <p className="text-xs text-muted-foreground">New bookings today</p>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex items-center justify-center py-12">
-                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <TabsContent value="payments" className="space-y-4 mt-4">
+              {/* Summary Stats */}
+              <div className="grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xl sm:text-2xl font-bold">{stats?.revenue.formatted || "₹0"}</div>
+                    <p className="text-xs text-muted-foreground">Platform revenue</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Pending Payouts</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xl sm:text-2xl font-bold text-yellow-600">
+                      ₹{payouts.filter(p => p.status === "pending").reduce((sum, p) => sum + p.netAmount, 0).toLocaleString()}
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      {payouts.filter(p => p.status === "pending").length} payouts
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Processed</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xl sm:text-2xl font-bold text-green-600">
+                      ₹{payouts.filter(p => p.status === "processed").reduce((sum, p) => sum + p.netAmount, 0).toLocaleString()}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {payouts.filter(p => p.status === "processed").length} payouts
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Total Commission</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xl sm:text-2xl font-bold text-purple-600">
+                      ₹{payouts.reduce((sum, p) => sum + p.commissionAmount, 0).toLocaleString()}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Platform earnings</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Filters and Actions */}
+              <Card>
+                <CardHeader className="p-3 sm:p-6">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+                    <div>
+                      <CardTitle className="text-base sm:text-lg">Venue Payouts</CardTitle>
+                      <CardDescription className="text-xs sm:text-sm">
+                        Manage payments to venues (like Zomato/Swiggy)
+                      </CardDescription>
+                    </div>
+                    <Button
+                      onClick={() => {
+                        // Open generate payout dialog
+                        setShowGeneratePayoutDialog(true);
+                      }}
+                      className="w-full sm:w-auto text-xs sm:text-sm h-9 sm:h-10"
+                    >
+                      <Plus className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      Generate Payout
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-3 sm:p-6">
+                  {/* Filters */}
+                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4">
+                    <Select
+                      value={payoutStatusFilter}
+                      onValueChange={(value) => {
+                        setPayoutStatusFilter(value);
+                        setPayoutPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="w-full sm:w-[180px] text-xs sm:text-sm h-9 sm:h-10">
+                        <SelectValue placeholder="Filter by status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="processing">Processing</SelectItem>
+                        <SelectItem value="processed">Processed</SelectItem>
+                        <SelectItem value="failed">Failed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={payoutVenueFilter}
+                      onValueChange={(value) => {
+                        setPayoutVenueFilter(value);
+                        setPayoutPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="w-full sm:w-[180px] text-xs sm:text-sm h-9 sm:h-10">
+                        <SelectValue placeholder="Filter by venue" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Venues</SelectItem>
+                        {venues.map((venue) => (
+                          <SelectItem key={venue.id} value={venue.id}>
+                            {venue.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Payouts List */}
+                  {payoutsLoading ? (
+                    <div className="flex items-center justify-center py-8 sm:py-12">
+                      <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : payouts.length > 0 ? (
+                    <div className="space-y-3 sm:space-y-4">
+                      {payouts.map((payout) => (
+                        <div
+                          key={payout.id}
+                          className="flex flex-col gap-3 sm:gap-4 rounded-lg border p-3 sm:p-4"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1.5">
+                                <h3 className="font-semibold text-sm sm:text-base truncate">
+                                  {payout.venue?.name || "Unknown Venue"}
+                                </h3>
+                                <Badge
+                                  variant={
+                                    payout.status === "processed"
+                                      ? "default"
+                                      : payout.status === "pending"
+                                      ? "secondary"
+                                      : payout.status === "processing"
+                                      ? "outline"
+                                      : "destructive"
+                                  }
+                                  className="text-[10px] sm:text-xs shrink-0"
+                                >
+                                  {payout.status}
+                                </Badge>
+                              </div>
+                              <p className="text-xs sm:text-sm text-muted-foreground">
+                                {payout.venue?.city || ""} • Period: {new Date(payout.periodStartDate).toLocaleDateString()} - {new Date(payout.periodEndDate).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-base sm:text-lg font-bold text-green-600">
+                                ₹{payout.netAmount.toLocaleString()}
+                              </p>
+                              <p className="text-[10px] sm:text-xs text-muted-foreground">
+                                {payout.bookingCount} bookings
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Payout Details */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 pt-2 border-t text-xs sm:text-sm">
+                            <div>
+                              <p className="text-muted-foreground">Total Revenue</p>
+                              <p className="font-medium">₹{payout.totalRevenue.toLocaleString()}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Commission ({payout.commissionRate}%)</p>
+                              <p className="font-medium text-red-600">-₹{payout.commissionAmount.toLocaleString()}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Net Amount</p>
+                              <p className="font-medium text-green-600">₹{payout.netAmount.toLocaleString()}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Created</p>
+                              <p className="font-medium">{new Date(payout.createdAt).toLocaleDateString()}</p>
+                            </div>
+                          </div>
+
+                          {/* Bank Details */}
+                          {payout.bankAccount && (
+                            <div className="pt-2 border-t text-xs sm:text-sm">
+                              <p className="text-muted-foreground mb-1">Bank Details:</p>
+                              <p className="font-medium">
+                                {payout.accountHolderName || payout.venue?.ownerName || "N/A"} • 
+                                A/C: {payout.bankAccount} • 
+                                IFSC: {payout.ifscCode || payout.venue?.ifscCode || "N/A"}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Transaction Details */}
+                          {payout.status === "processed" && payout.transactionId && (
+                            <div className="pt-2 border-t text-xs sm:text-sm">
+                              <p className="text-muted-foreground mb-1">Transaction Details:</p>
+                              <p className="font-medium">
+                                Txn ID: {payout.transactionId} • 
+                                Processed: {payout.processedAt ? new Date(payout.processedAt).toLocaleString() : "N/A"}
+                                {payout.processedBy && ` • By ${payout.processedBy}`}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Actions */}
+                          <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleDownloadPayoutPDF(payout.id)}
+                              className="w-full sm:w-auto text-xs sm:text-sm h-8 sm:h-9"
+                            >
+                              <Download className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                              Download PDF
+                            </Button>
+                            {payout.status === "pending" && (
+                              <Button
+                                size="sm"
+                                onClick={() => handleProcessPayout(payout.id)}
+                                className="w-full sm:w-auto text-xs sm:text-sm h-8 sm:h-9"
+                              >
+                                <CheckCircle className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                Mark as Processed
+                              </Button>
+                            )}
+                            {payout.status === "processed" && (
+                              <Badge variant="default" className="w-fit text-xs sm:text-sm">
+                                <CheckCircle className="mr-1 h-3 w-3" />
+                                Payment Sent
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Pagination */}
+                      {payoutTotalPages > 1 && (
+                        <div className="flex items-center justify-center gap-2 pt-4">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setPayoutPage((p) => Math.max(1, p - 1))}
+                            disabled={payoutPage === 1}
+                            className="text-xs sm:text-sm h-8 sm:h-9"
+                          >
+                            <ArrowLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            Previous
+                          </Button>
+                          <span className="text-xs sm:text-sm text-muted-foreground">
+                            Page {payoutPage} of {payoutTotalPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setPayoutPage((p) => Math.min(payoutTotalPages, p + 1))}
+                            disabled={payoutPage === payoutTotalPages}
+                            className="text-xs sm:text-sm h-8 sm:h-9"
+                          >
+                            Next
+                            <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-8">
+                      No payouts found
+                    </p>
                   )}
                 </CardContent>
               </Card>
@@ -1453,6 +1911,126 @@ export default function AdminDashboard() {
               No venue details available
             </p>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Generate Payout Dialog */}
+      <Dialog 
+        open={showGeneratePayoutDialog} 
+        onOpenChange={(open) => {
+          setShowGeneratePayoutDialog(open);
+          // Always load approved venues when dialog opens (refresh list)
+          if (open) {
+            loadApprovedVenues();
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl w-[95vw] sm:w-full p-3 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg sm:text-2xl">Generate Payout</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
+              Create a payout for a venue based on completed bookings in a period
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="venue-select" className="text-xs sm:text-sm">Select Venue *</Label>
+              <Select
+                value={generatePayoutData.venueId}
+                onValueChange={(value) => setGeneratePayoutData({ ...generatePayoutData, venueId: value })}
+              >
+                <SelectTrigger id="venue-select" className="w-full text-xs sm:text-sm h-9 sm:h-10">
+                  <SelectValue placeholder="Choose a venue" />
+                </SelectTrigger>
+                <SelectContent>
+                  {approvedVenues.length > 0 ? (
+                    approvedVenues.map((venue) => (
+                      <SelectItem key={venue.id} value={venue.id}>
+                        {venue.name} - {venue.city}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="loading" disabled>
+                      Loading venues...
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              {approvedVenues.length === 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  No approved venues found. Please approve venues first.
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="start-date" className="text-xs sm:text-sm">Period Start Date *</Label>
+                <Input
+                  id="start-date"
+                  type="date"
+                  value={generatePayoutData.periodStartDate}
+                  onChange={(e) => setGeneratePayoutData({ ...generatePayoutData, periodStartDate: e.target.value })}
+                  className="text-xs sm:text-sm h-9 sm:h-10"
+                />
+              </div>
+              <div>
+                <Label htmlFor="end-date" className="text-xs sm:text-sm">Period End Date *</Label>
+                <Input
+                  id="end-date"
+                  type="date"
+                  value={generatePayoutData.periodEndDate}
+                  onChange={(e) => setGeneratePayoutData({ ...generatePayoutData, periodEndDate: e.target.value })}
+                  className="text-xs sm:text-sm h-9 sm:h-10"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="commission-rate" className="text-xs sm:text-sm">Commission Rate (%)</Label>
+              <Input
+                id="commission-rate"
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                value={generatePayoutData.commissionRate}
+                onChange={(e) => setGeneratePayoutData({ ...generatePayoutData, commissionRate: parseFloat(e.target.value) || 10 })}
+                className="text-xs sm:text-sm h-9 sm:h-10"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Default: 10% (Platform commission)
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => setShowGeneratePayoutDialog(false)}
+                className="flex-1 sm:flex-initial text-xs sm:text-sm h-9 sm:h-10"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleGeneratePayout}
+                disabled={isGeneratingPayout}
+                className="flex-1 sm:flex-initial text-xs sm:text-sm h-9 sm:h-10"
+              >
+                {isGeneratingPayout ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Generate Payout
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
