@@ -26,3 +26,11 @@ WHERE table_schema = 'public'
   AND column_name IN ('payout_amount', 'total_revenue')
 ORDER BY ordinal_position;
 
+
+
+
+
+
+
+
+

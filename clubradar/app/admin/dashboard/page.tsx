@@ -232,6 +232,8 @@ export default function AdminDashboard() {
   const [approvedVenues, setApprovedVenues] = useState<Venue[]>([]); // For payout dialog (only approved venues)
   const [overviewVenuesLoading, setOverviewVenuesLoading] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookingAnalytics, setBookingAnalytics] = useState<any[]>([]);
+  const [bookingAnalyticsLoading, setBookingAnalyticsLoading] = useState(false);
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [venueRevenue, setVenueRevenue] = useState<any[]>([]);
   const [revenueLoading, setRevenueLoading] = useState(false);
@@ -243,6 +245,16 @@ export default function AdminDashboard() {
   const [revenueStartDate, setRevenueStartDate] = useState("");
   const [revenueEndDate, setRevenueEndDate] = useState("");
   const [showRevenueAnalytics, setShowRevenueAnalytics] = useState(false);
+  
+  // Booking filters
+  const [bookingSearch, setBookingSearch] = useState("");
+  const [bookingStatusFilter, setBookingStatusFilter] = useState("all");
+  const [bookingVenueFilter, setBookingVenueFilter] = useState("all");
+  const [bookingStartDate, setBookingStartDate] = useState("");
+  const [bookingEndDate, setBookingEndDate] = useState("");
+  const [bookingPage, setBookingPage] = useState(1);
+  const [bookingTotalPages, setBookingTotalPages] = useState(1);
+  const [showBookingAnalytics, setShowBookingAnalytics] = useState(false);
   
   // Filters
   const [venueSearch, setVenueSearch] = useState("");
@@ -351,11 +363,28 @@ export default function AdminDashboard() {
     }
   };
 
-  // Load bookings
-  const loadBookings = async () => {
+  // Load bookings with filters
+  const loadBookings = async (
+    page: number = 1,
+    search: string = "",
+    status: string = "all",
+    venueId: string = "all",
+    startDate: string = "",
+    endDate: string = ""
+  ) => {
     setBookingsLoading(true);
     try {
-      const response = await fetch("/api/admin/bookings?limit=50");
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: "20",
+        ...(search && { search }),
+        ...(status !== "all" && { status }),
+        ...(venueId !== "all" && { venueId }),
+        ...(startDate && { startDate }),
+        ...(endDate && { endDate }),
+      });
+
+      const response = await fetch(`/api/admin/bookings?${params}`);
       const data = await response.json();
 
       if (!response.ok) {
@@ -363,11 +392,36 @@ export default function AdminDashboard() {
       }
 
       setBookings(data.bookings || []);
+      setBookingTotalPages(data.pagination?.totalPages || 1);
     } catch (error: any) {
       console.error("Error loading bookings:", error);
       toast.error(error.message || "Failed to load bookings");
     } finally {
       setBookingsLoading(false);
+    }
+  };
+
+  // Load booking analytics
+  const loadBookingAnalytics = async (startDate?: string, endDate?: string) => {
+    setBookingAnalyticsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (startDate) params.append("startDate", startDate);
+      if (endDate) params.append("endDate", endDate);
+
+      const response = await fetch(`/api/admin/bookings/analytics?${params}`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to load booking analytics");
+      }
+
+      setBookingAnalytics(data.analytics || []);
+    } catch (error: any) {
+      console.error("Error loading booking analytics:", error);
+      toast.error(error.message || "Failed to load booking analytics");
+    } finally {
+      setBookingAnalyticsLoading(false);
     }
   };
 
@@ -692,7 +746,8 @@ export default function AdminDashboard() {
       // Load filtered venues for Venues tab
       loadVenues(1, venueSearch, venueStatusFilter);
     } else if (activeTab === "bookings") {
-      loadBookings();
+      loadBookings(bookingPage, bookingSearch, bookingStatusFilter, bookingVenueFilter, bookingStartDate, bookingEndDate);
+      loadApprovedVenues(); // Load venues for filter dropdown
     } else if (activeTab === "payments") {
       loadPayouts(1, payoutStatusFilter, payoutVenueFilter);
       // Always load approved venues when switching to Payments tab
@@ -1233,70 +1288,478 @@ export default function AdminDashboard() {
 
             {/* Bookings Tab */}
             <TabsContent value="bookings" className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold">All Bookings</h2>
-              </div>
-
+              {/* Booking Analytics Section */}
               <Card>
-                <CardHeader>
-                  <CardTitle>Platform Bookings</CardTitle>
-                  <CardDescription>
-                    View all bookings across all venues
-                  </CardDescription>
+                <CardHeader className="p-3 sm:p-6">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+                    <div>
+                      <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
+                        Booking Analytics by Venue
+                      </CardTitle>
+                      <CardDescription className="text-xs sm:text-sm">
+                        View booking statistics and revenue for all venues
+                      </CardDescription>
+                    </div>
+                    <Button
+                      variant={showBookingAnalytics ? "default" : "outline"}
+                      onClick={() => {
+                        setShowBookingAnalytics(!showBookingAnalytics);
+                        if (!showBookingAnalytics) {
+                          // Set default to current month if not set
+                          if (!bookingStartDate || !bookingEndDate) {
+                            const now = new Date();
+                            const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+                            const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                            setBookingStartDate(firstDay.toISOString().split('T')[0]);
+                            setBookingEndDate(lastDay.toISOString().split('T')[0]);
+                            loadBookingAnalytics(firstDay.toISOString().split('T')[0], lastDay.toISOString().split('T')[0]);
+                          } else {
+                            loadBookingAnalytics(bookingStartDate, bookingEndDate);
+                          }
+                        }
+                      }}
+                      className="w-full sm:w-auto text-xs sm:text-sm h-9 sm:h-10"
+                    >
+                      <TrendingUp className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      {showBookingAnalytics ? "Hide Analytics" : "Show Analytics"}
+                    </Button>
+                  </div>
                 </CardHeader>
-                <CardContent>
+                {showBookingAnalytics && (
+                  <CardContent className="p-3 sm:p-6 space-y-4">
+                    {/* Date Range Filter */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                      <div>
+                        <Label htmlFor="booking-analytics-start-date" className="text-xs sm:text-sm">Start Date</Label>
+                        <Input
+                          id="booking-analytics-start-date"
+                          type="date"
+                          value={bookingStartDate}
+                          onChange={(e) => {
+                            setBookingStartDate(e.target.value);
+                            if (bookingEndDate) {
+                              loadBookingAnalytics(e.target.value, bookingEndDate);
+                            }
+                          }}
+                          className="text-xs sm:text-sm h-9 sm:h-10"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="booking-analytics-end-date" className="text-xs sm:text-sm">End Date</Label>
+                        <Input
+                          id="booking-analytics-end-date"
+                          type="date"
+                          value={bookingEndDate}
+                          onChange={(e) => {
+                            setBookingEndDate(e.target.value);
+                            if (bookingStartDate) {
+                              loadBookingAnalytics(bookingStartDate, e.target.value);
+                            }
+                          }}
+                          className="text-xs sm:text-sm h-9 sm:h-10"
+                        />
+                      </div>
+                      <div className="flex items-end">
+                        <Button
+                          onClick={() => {
+                            if (bookingStartDate && bookingEndDate) {
+                              loadBookingAnalytics(bookingStartDate, bookingEndDate);
+                            }
+                          }}
+                          disabled={!bookingStartDate || !bookingEndDate}
+                          className="w-full text-xs sm:text-sm h-9 sm:h-10"
+                        >
+                          <Search className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                          Load Analytics
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Analytics Table - Desktop, Cards - Mobile */}
+                    {bookingAnalyticsLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : bookingAnalytics.length > 0 ? (
+                      <div className="space-y-3">
+                        {/* Mobile Card View */}
+                        <div className="block sm:hidden space-y-2">
+                          {bookingAnalytics.map((venue) => (
+                            <div key={venue.venueId} className="border rounded-lg p-2.5 space-y-1.5 bg-card">
+                              <div className="flex items-center justify-between">
+                                <h4 className="font-semibold text-xs truncate flex-1">{venue.venueName}</h4>
+                                <Badge variant="outline" className="text-[9px] ml-1 shrink-0">{venue.conversionRate}%</Badge>
+                              </div>
+                              <p className="text-[10px] text-muted-foreground">{venue.city}</p>
+                              <div className="grid grid-cols-2 gap-1.5 pt-1 border-t text-[10px]">
+                                <div>
+                                  <span className="text-muted-foreground">Total:</span>
+                                  <span className="ml-1 font-medium">{venue.totalBookings}</span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Completed:</span>
+                                  <span className="ml-1 font-medium text-green-600">{venue.completedBookings}</span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Pending:</span>
+                                  <span className="ml-1 font-medium text-yellow-600">{venue.pendingBookings}</span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Cancelled:</span>
+                                  <span className="ml-1 font-medium text-red-600">{venue.cancelledBookings}</span>
+                                </div>
+                              </div>
+                              <div className="pt-1 border-t">
+                                <span className="text-[10px] text-muted-foreground">Revenue: </span>
+                                <span className="text-[10px] font-semibold text-green-600">₹{venue.completedRevenue.toLocaleString()}</span>
+                              </div>
+                            </div>
+                          ))}
+                          {/* Mobile Total Card */}
+                          <div className="border-2 rounded-lg p-2.5 bg-muted/50 space-y-1.5">
+                            <h4 className="font-bold text-xs">Total</h4>
+                            <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                              <div>
+                                <span className="text-muted-foreground">Total:</span>
+                                <span className="ml-1 font-bold">{bookingAnalytics.reduce((sum, v) => sum + v.totalBookings, 0)}</span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Completed:</span>
+                                <span className="ml-1 font-bold text-green-600">{bookingAnalytics.reduce((sum, v) => sum + v.completedBookings, 0)}</span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Pending:</span>
+                                <span className="ml-1 font-bold text-yellow-600">{bookingAnalytics.reduce((sum, v) => sum + v.pendingBookings, 0)}</span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Cancelled:</span>
+                                <span className="ml-1 font-bold text-red-600">{bookingAnalytics.reduce((sum, v) => sum + v.cancelledBookings, 0)}</span>
+                              </div>
+                            </div>
+                            <div className="pt-1 border-t">
+                              <span className="text-[10px] text-muted-foreground">Total Revenue: </span>
+                              <span className="text-[10px] font-bold text-green-600">₹{bookingAnalytics.reduce((sum, v) => sum + v.completedRevenue, 0).toLocaleString()}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Desktop Table View */}
+                        <div className="hidden sm:block overflow-x-auto">
+                          <table className="w-full text-xs sm:text-sm border-collapse">
+                            <thead>
+                              <tr className="border-b bg-muted/50">
+                                <th className="text-left p-2 sm:p-3 font-semibold">Venue</th>
+                                <th className="text-left p-2 sm:p-3 font-semibold">City</th>
+                                <th className="text-right p-2 sm:p-3 font-semibold">Total</th>
+                                <th className="text-right p-2 sm:p-3 font-semibold">Completed</th>
+                                <th className="text-right p-2 sm:p-3 font-semibold">Pending</th>
+                                <th className="text-right p-2 sm:p-3 font-semibold">Cancelled</th>
+                                <th className="text-right p-2 sm:p-3 font-semibold">Revenue</th>
+                                <th className="text-right p-2 sm:p-3 font-semibold">Conversion</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {bookingAnalytics.map((venue) => (
+                                <tr key={venue.venueId} className="border-b hover:bg-muted/50">
+                                  <td className="p-2 sm:p-3 font-medium">{venue.venueName}</td>
+                                  <td className="p-2 sm:p-3 text-muted-foreground">{venue.city}</td>
+                                  <td className="p-2 sm:p-3 text-right">{venue.totalBookings}</td>
+                                  <td className="p-2 sm:p-3 text-right text-green-600">{venue.completedBookings}</td>
+                                  <td className="p-2 sm:p-3 text-right text-yellow-600">{venue.pendingBookings}</td>
+                                  <td className="p-2 sm:p-3 text-right text-red-600">{venue.cancelledBookings}</td>
+                                  <td className="p-2 sm:p-3 text-right font-semibold text-green-600">
+                                    ₹{venue.completedRevenue.toLocaleString()}
+                                  </td>
+                                  <td className="p-2 sm:p-3 text-right">{venue.conversionRate}%</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="border-t-2 font-bold bg-muted/50">
+                                <td colSpan={2} className="p-2 sm:p-3">Total</td>
+                                <td className="p-2 sm:p-3 text-right">
+                                  {bookingAnalytics.reduce((sum, v) => sum + v.totalBookings, 0)}
+                                </td>
+                                <td className="p-2 sm:p-3 text-right text-green-600">
+                                  {bookingAnalytics.reduce((sum, v) => sum + v.completedBookings, 0)}
+                                </td>
+                                <td className="p-2 sm:p-3 text-right text-yellow-600">
+                                  {bookingAnalytics.reduce((sum, v) => sum + v.pendingBookings, 0)}
+                                </td>
+                                <td className="p-2 sm:p-3 text-right text-red-600">
+                                  {bookingAnalytics.reduce((sum, v) => sum + v.cancelledBookings, 0)}
+                                </td>
+                                <td className="p-2 sm:p-3 text-right text-green-600">
+                                  ₹{bookingAnalytics.reduce((sum, v) => sum + v.completedRevenue, 0).toLocaleString()}
+                                </td>
+                                <td className="p-2 sm:p-3 text-right">
+                                  {bookingAnalytics.reduce((sum, v) => sum + v.totalBookings, 0) > 0
+                                    ? ((bookingAnalytics.reduce((sum, v) => sum + v.completedBookings, 0) / bookingAnalytics.reduce((sum, v) => sum + v.totalBookings, 0)) * 100).toFixed(1)
+                                    : "0.0"}%
+                                </td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs sm:text-sm text-muted-foreground text-center py-8">
+                        {bookingStartDate && bookingEndDate
+                          ? "No booking data found for selected period"
+                          : "Select a date range to view booking analytics"}
+                      </p>
+                    )}
+                  </CardContent>
+                )}
+              </Card>
+
+              {/* Bookings List */}
+              <Card>
+                <CardHeader className="p-3 sm:p-6">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+                    <div>
+                      <CardTitle className="text-base sm:text-lg">Platform Bookings</CardTitle>
+                      <CardDescription className="text-xs sm:text-sm">
+                        View all bookings across all venues
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-3 sm:p-6">
+                  {/* Filters */}
+                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search by user, email, phone, event..."
+                        className="pl-9 w-full text-xs sm:text-sm h-9 sm:h-10"
+                        value={bookingSearch}
+                        onChange={(e) => {
+                          setBookingSearch(e.target.value);
+                          setBookingPage(1);
+                        }}
+                      />
+                    </div>
+                    <Select
+                      value={bookingStatusFilter}
+                      onValueChange={(value) => {
+                        setBookingStatusFilter(value);
+                        setBookingPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="w-full sm:w-[180px] text-xs sm:text-sm h-9 sm:h-10">
+                        <SelectValue placeholder="Filter by status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="confirmed">Completed</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={bookingVenueFilter}
+                      onValueChange={(value) => {
+                        setBookingVenueFilter(value);
+                        setBookingPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="w-full sm:w-[180px] text-xs sm:text-sm h-9 sm:h-10">
+                        <SelectValue placeholder="Filter by venue" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Venues</SelectItem>
+                        {approvedVenues.map((venue) => (
+                          <SelectItem key={venue.id} value={venue.id}>
+                            {venue.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Date Range Filter */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 mb-4">
+                    <div>
+                      <Label htmlFor="booking-start-date" className="text-xs sm:text-sm">Start Date</Label>
+                      <Input
+                        id="booking-start-date"
+                        type="date"
+                        value={bookingStartDate}
+                        onChange={(e) => {
+                          setBookingStartDate(e.target.value);
+                          setBookingPage(1);
+                        }}
+                        className="text-xs sm:text-sm h-9 sm:h-10"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="booking-end-date" className="text-xs sm:text-sm">End Date</Label>
+                      <Input
+                        id="booking-end-date"
+                        type="date"
+                        value={bookingEndDate}
+                        onChange={(e) => {
+                          setBookingEndDate(e.target.value);
+                          setBookingPage(1);
+                        }}
+                        className="text-xs sm:text-sm h-9 sm:h-10"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setBookingStartDate("");
+                          setBookingEndDate("");
+                          setBookingPage(1);
+                        }}
+                        className="w-full text-xs sm:text-sm h-9 sm:h-10"
+                      >
+                        Clear Dates
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Bookings List */}
                   {bookingsLoading ? (
                     <div className="flex items-center justify-center py-12">
                       <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                     </div>
                   ) : bookings.length > 0 ? (
-                    <div className="space-y-4">
+                    <div className="space-y-2 sm:space-y-3">
                       {bookings.map((booking) => (
                         <div
                           key={booking.id}
-                          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-lg border p-4"
+                          className="rounded-lg border p-2.5 sm:p-3 bg-card"
                         >
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <h3 className="font-semibold">
-                                {booking.event?.name || "Unknown Event"}
-                              </h3>
+                          {/* Mobile Layout */}
+                          <div className="block sm:hidden space-y-1.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-xs truncate mb-0.5">
+                                  {booking.event?.name || "Unknown Event"}
+                                </h3>
+                                <p className="text-[10px] text-muted-foreground truncate">
+                                  {booking.event?.venue?.name || "Unknown"} • {booking.event?.venue?.city || ""}
+                                </p>
+                              </div>
                               <Badge
                                 variant={
                                   booking.paymentStatus === "completed"
                                     ? "default"
-                                    : "secondary"
+                                    : booking.paymentStatus === "pending"
+                                    ? "secondary"
+                                    : "destructive"
                                 }
+                                className="text-[9px] shrink-0"
                               >
                                 {booking.paymentStatus}
                               </Badge>
                             </div>
-                            <p className="text-sm text-muted-foreground">
-                              Venue: {booking.event?.venue?.name || "Unknown"} •{" "}
-                              {booking.event?.venue?.city || ""}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              User: {booking.user?.name || "Unknown"} •{" "}
-                              {booking.user?.email || ""}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              Date: {booking.event?.date || "N/A"} • Time:{" "}
-                              {booking.event?.time || "N/A"}
-                            </p>
-                            <p className="text-sm font-medium mt-1">
-                              ₹{booking.totalAmount.toLocaleString()} •{" "}
-                              {booking.numberOfPeople} person
-                              {booking.numberOfPeople !== 1 ? "s" : ""}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
+                            <div className="grid grid-cols-2 gap-1.5 pt-1.5 border-t text-[10px]">
+                              <div>
+                                <span className="text-muted-foreground">User:</span>
+                                <p className="truncate font-medium">{booking.user?.name || "Unknown"}</p>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Email:</span>
+                                <p className="truncate">{booking.user?.email || ""}</p>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Date:</span>
+                                <p className="truncate">{booking.event?.date || "N/A"}</p>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Time:</span>
+                                <p className="truncate">{booking.event?.time || "N/A"}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between pt-1.5 border-t">
+                              <div>
+                                <span className="text-[10px] text-muted-foreground">Amount: </span>
+                                <span className="text-[10px] font-semibold">₹{booking.totalAmount.toLocaleString()}</span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-muted-foreground">People: </span>
+                                <span className="text-[10px] font-semibold">{booking.numberOfPeople}</span>
+                              </div>
+                            </div>
+                            <p className="text-[9px] text-muted-foreground pt-1 border-t">
                               Booked: {new Date(booking.createdAt).toLocaleString()}
                             </p>
                           </div>
+
+                          {/* Desktop Layout */}
+                          <div className="hidden sm:flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1.5">
+                                <h3 className="font-semibold text-sm sm:text-base truncate">
+                                  {booking.event?.name || "Unknown Event"}
+                                </h3>
+                                <Badge
+                                  variant={
+                                    booking.paymentStatus === "completed"
+                                      ? "default"
+                                      : booking.paymentStatus === "pending"
+                                      ? "secondary"
+                                      : "destructive"
+                                  }
+                                  className="text-[10px] sm:text-xs shrink-0"
+                                >
+                                  {booking.paymentStatus}
+                                </Badge>
+                              </div>
+                              <p className="text-xs sm:text-sm text-muted-foreground truncate">
+                                Venue: {booking.event?.venue?.name || "Unknown"} • {booking.event?.venue?.city || ""}
+                              </p>
+                              <p className="text-xs sm:text-sm text-muted-foreground truncate">
+                                User: {booking.user?.name || "Unknown"} • {booking.user?.email || ""}
+                              </p>
+                              <p className="text-xs sm:text-sm text-muted-foreground">
+                                Date: {booking.event?.date || "N/A"} • Time: {booking.event?.time || "N/A"}
+                              </p>
+                              <p className="text-xs sm:text-sm font-medium mt-1">
+                                ₹{booking.totalAmount.toLocaleString()} • {booking.numberOfPeople} person{booking.numberOfPeople !== 1 ? "s" : ""}
+                              </p>
+                              <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
+                                Booked: {new Date(booking.createdAt).toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
                         </div>
                       ))}
+                      {bookingTotalPages > 1 && (
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-2 mt-4">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setBookingPage((prev) => Math.max(1, prev - 1))}
+                            disabled={bookingPage === 1}
+                            className="w-full sm:w-auto text-xs sm:text-sm h-8 sm:h-9"
+                          >
+                            <ArrowLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 sm:mr-0" />
+                            <span className="sm:hidden">Previous</span>
+                          </Button>
+                          <span className="text-[10px] sm:text-xs text-muted-foreground">
+                            Page {bookingPage} of {bookingTotalPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setBookingPage((prev) => Math.min(bookingTotalPages, prev + 1))}
+                            disabled={bookingPage === bookingTotalPages}
+                            className="w-full sm:w-auto text-xs sm:text-sm h-8 sm:h-9"
+                          >
+                            <span className="sm:hidden">Next</span>
+                            <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 ml-1 sm:ml-0" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground text-center py-8">
+                    <p className="text-xs sm:text-sm text-muted-foreground text-center py-8">
                       No bookings found
                     </p>
                   )}

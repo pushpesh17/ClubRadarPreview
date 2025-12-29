@@ -35,6 +35,8 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search") || "";
     const status = searchParams.get("status") || "all";
     const venueId = searchParams.get("venueId") || "";
+    const startDate = searchParams.get("startDate") || "";
+    const endDate = searchParams.get("endDate") || "";
 
     const offset = (page - 1) * limit;
 
@@ -80,8 +82,40 @@ export async function GET(request: NextRequest) {
     }
 
     if (venueId) {
-      // Filter by venue through events
-      query = query.eq("events.venues.id", venueId);
+      // Filter by venue through events - need to join properly
+      // First get event IDs for this venue
+      const { data: venueEvents } = await supabase
+        .from("events")
+        .select("id")
+        .eq("venue_id", venueId);
+      
+      const eventIds = (venueEvents || []).map((e: any) => e.id);
+      
+      if (eventIds.length > 0) {
+        query = query.in("event_id", eventIds);
+      } else {
+        // No events for this venue, return empty
+        return NextResponse.json(
+          {
+            success: true,
+            bookings: [],
+            pagination: {
+              page,
+              limit,
+              total: 0,
+              totalPages: 0,
+            },
+          },
+          { status: 200 }
+        );
+      }
+    }
+
+    // Apply date range filter
+    if (startDate && endDate) {
+      query = query
+        .gte("created_at", `${startDate}T00:00:00Z`)
+        .lte("created_at", `${endDate}T23:59:59Z`);
     }
 
     if (search) {
